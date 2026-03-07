@@ -1,0 +1,35 @@
+# Dev dependencies — installed fresh inside the image via npm ci
+node_modules
+
+# Secrets — must never land in the image layer
+.env
+.env.*
+
+# Local upload data — irrelevant inside the container (cloud storage is used in prod)
+uploads/
+
+# Test code and coverage reports
+tests/
+coverage/
+
+# VCS
+.git
+.gitignore
+
+# Docs / editor config
+*.md
+docs/
+.vscode/
+.idea/
+
+# Docker files themselves
+.dockerignore
+docker-compose*.yml
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,1654 @@
+{
+  "info": {
+    "_postman_id": "a7c2e4f8-b3d5-4e9a-8c1b-2f6d0a4e7b9c",
+    "name": "File Upload Service — Complete API",
+    "description": "# File Upload Microservice — Postman Collection\n\n## Quick Start\n1. Import this collection into Postman\n2. No environment setup needed — all defaults are in collection variables\n3. Run **Upload Files → Single File Upload** first — `fileId` is auto-saved to collection variables\n4. All subsequent requests use `{{fileId}}` automatically\n\n## Collection Variables\n| Variable | Default | Description |\n|----------|---------|-------------|\n| `baseUrl` | http://localhost:4001 | Service base URL |\n| `tenantId` | tenant-a | Primary test tenant |\n| `tenantB` | tenant-b | Secondary tenant (cross-tenant tests) |\n| `userId` | user-001 | User ID via X-User-Id header |\n| `userRole` | admin | Role via X-User-Role header |\n| `fileId` | *(auto-set)* | Populated after first upload |\n\n## Response Envelope\n```\n// Success\n{ \"success\": true, \"statusCode\": 200, \"message\": \"...\", \"data\": {...} }\n\n// Error\n{ \"success\": false, \"statusCode\": 400, \"message\": \"...\", \"error\": { \"code\": \"...\", \"errors\": [...] } }\n```",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",  "value": "http://localhost:4001", "type": "string" },
+    { "key": "tenantId", "value": "tenant-a",             "type": "string" },
+    { "key": "tenantB",  "value": "tenant-b",             "type": "string" },
+    { "key": "userId",   "value": "user-001",             "type": "string" },
+    { "key": "userRole", "value": "admin",                "type": "string" },
+    { "key": "fileId",   "value": "",                     "type": "string", "description": "Auto-populated by the Single File Upload request" }
+  ],
+  "item": [
+
+    {
+      "name": "🏥 Health Check",
+      "item": [
+        {
+          "name": "Health — Service Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body has status ok', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.equal('ok');",
+                  "  pm.expect(json.db).to.equal('connected');",
+                  "  pm.expect(json.timestamp).to.be.a('string');",
+                  "  pm.expect(json.version).to.be.a('string');",
+                  "  pm.expect(json.uptime).to.be.a('number');",
+                  "  pm.expect(json.memory).to.have.all.keys('heapUsedMB', 'heapTotalMB', 'rssMB');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Returns service status, DB connectivity state, and current timestamp. No headers required."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "📤 Upload Files",
+      "description": "All upload requests use multipart/form-data. The `files` field accepts up to 10 files. After a successful upload the test script auto-saves the first file's ID into the `fileId` collection variable.",
+      "item": [
+        {
+          "name": "Upload — Single File ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('Response envelope is correct', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.statusCode).to.equal(201);",
+                  "  pm.expect(json.message).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('File data returned and fileId saved', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data).to.be.an('array').with.length.above(0);",
+                  "  const file = json.data[0];",
+                  "  pm.expect(file.id).to.be.a('string');",
+                  "  pm.expect(file.originalName).to.be.a('string');",
+                  "  pm.expect(file.size).to.be.a('number').and.above(0);",
+                  "  pm.expect(file.mimeType).to.be.a('string');",
+                  "  pm.collectionVariables.set('fileId', file.id);",
+                  "  console.log('✅ Saved fileId:', file.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files",            "type": "file",   "src": [],               "description": "Select any file (image, pdf, etc.)" },
+                { "key": "category",         "type": "text",   "value": "test",          "description": "Top-level category label" },
+                { "key": "description",      "type": "text",   "value": "Test upload from Postman" },
+                { "key": "title",            "type": "text",   "value": "Postman Test File", "description": "Display title" },
+                { "key": "altText",          "type": "text",   "value": "A test file",    "description": "Accessibility alt text" },
+                { "key": "author",           "type": "text",   "value": "Postman",         "description": "Content author" },
+                { "key": "language",         "type": "text",   "value": "en",            "description": "ISO 639-1 language code" },
+                { "key": "isPublic",         "type": "text",   "value": "false",          "description": "Visibility flag" },
+                { "key": "linkedEntityType", "type": "text",   "value": "product",        "description": "Linked entity type" },
+                { "key": "linkedEntityId",   "type": "text",   "value": "prod_001",       "description": "Linked entity ID" },
+                { "key": "tags",             "type": "text",   "value": "postman" },
+                { "key": "tags",             "type": "text",   "value": "test" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Upload a single file. Optional fields: `category`, `description`, `title`, `altText`, `author`, `language`, `isPublic`, `linkedEntityType`, `linkedEntityId`, `tags` (repeated), `custom` (JSON string).\n\n**fileId is auto-saved to collection variables after success.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — Multiple Files ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Multiple files returned', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data).to.be.an('array').with.length.above(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files",       "type": "file", "src": [], "description": "First file" },
+                { "key": "files",       "type": "file", "src": [], "description": "Second file" },
+                { "key": "description", "type": "text", "value": "Multi-file upload test" },
+                { "key": "tags",        "type": "text", "value": "batch" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Upload up to 10 files in a single request using multiple `files` fields. Max 10 files per request (LIMIT_FILE_COUNT enforced)."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — No Files Provided ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error: no files provided', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('No files');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "description", "type": "text", "value": "Upload with no file attached" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Send a multipart/form-data request with no file attached. Expected: `400 Bad Request` with message `No files provided`."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — No X-Tenant-Id (uses default tenant) ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 — falls back to default tenant', () => pm.response.to.have.status(201));",
+                  "pm.test('File tenantId equals DEFAULT_TENANT_ID', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  console.log('tenantId used:', json.data[0]?.tenantId);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Id", "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": [], "description": "Select any file" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Omit `X-Tenant-Id`. The service falls back to `DEFAULT_TENANT_ID` (default: `\"default\"`) — the upload succeeds and the file is stored under that tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — File Too Large ❌ 413",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 413 Payload Too Large', () => pm.response.to.have.status(413));",
+                  "pm.test('Error message mentions size', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('too large');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": [], "description": "Select a file larger than MAX_FILE_SIZE (default: 10MB)" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Upload a file exceeding `MAX_FILE_SIZE` (default 10 MB). Multer throws `LIMIT_FILE_SIZE` → error handler returns `413 Payload Too Large`.\n\nTo test: select any file > 10 MB, or lower `MAX_FILE_SIZE=1024` in `.env` and retry."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — Unsupported MIME Type ❌ 415",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 415', () => pm.response.to.have.status(415));",
+                  "pm.test('Error mentions file type', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('not allowed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": [], "description": "Select a .exe, .zip, or other blocked file type" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Upload a file with a MIME type not in `ALLOWED_MIME_TYPES`. Default allowed: `image/jpeg, image/png, image/gif, application/pdf`. Try uploading a `.exe` or `.zip`."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload — Wrong Field Name ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error: unexpected field', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('Unexpected field');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [], "description": "Wrong key: use 'file' instead of 'files'" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Use `file` (singular) instead of `files` (plural). Multer throws `LIMIT_UNEXPECTED_FILE` → `400 Bad Request` with guidance message."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "📋 List & Search Files",
+      "description": "All list requests are scoped to the tenant in X-Tenant-Id. Supports filtering, sorting, and pagination.",
+      "item": [
+        {
+          "name": "List — All Files ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Paginated response', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.files).to.be.an('array');",
+                  "  pm.expect(json.data.pagination).to.have.all.keys('page', 'limit', 'total', 'pages');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"]
+            },
+            "description": "Returns all active files for the tenant. Default page=1, limit=20, sorted by createdAt desc."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Search by Name/Description ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search results returned', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.files).to.be.an('array');",
+                  "  console.log('Search returned', json.data.pagination.total, 'results');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?search=test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "search", "value": "test", "description": "Searches originalName and metadata.description" }
+              ]
+            },
+            "description": "Full-text search across `originalName` and `metadata.description` (case-insensitive regex)."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by MIME Type ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?mimeType=image/jpeg",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "mimeType", "value": "image/jpeg", "description": "Exact MIME type match" }
+              ]
+            },
+            "description": "Filter results to a specific MIME type."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Tags ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?tags=postman&tags=test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "tags", "value": "postman", "description": "Tag filter (OR — matches any tag)" },
+                { "key": "tags", "value": "test" }
+              ]
+            },
+            "description": "Filter by one or more tags (OR logic — files matching any of the tags are returned)."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Date Range Filter ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?dateFrom=2025-01-01&dateTo=2026-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "dateFrom", "value": "2025-01-01", "description": "ISO 8601 date — inclusive start" },
+                { "key": "dateTo",   "value": "2026-12-31", "description": "ISO 8601 date — inclusive end" }
+              ]
+            },
+            "description": "Filter files uploaded within a date range. Both dates are ISO 8601 format."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Paginate & Sort ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?page=1&limit=5&sort=-createdAt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "page",  "value": "1",          "description": "Page number (1-based)" },
+                { "key": "limit", "value": "5",          "description": "Items per page (max 100)" },
+                { "key": "sort",  "value": "-createdAt", "description": "Prefix - for descending. Fields: originalName, size, createdAt, updatedAt" }
+              ]
+            },
+            "description": "Paginate results with 5 per page, sorted newest first. Sort ascending: `sort=createdAt`. Sort by size: `sort=-size`."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Uploader ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?uploader={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "uploader", "value": "{{userId}}", "description": "Filter by uploader user ID" }
+              ]
+            },
+            "description": "Return only files uploaded by a specific user."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Category ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?category=test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "category", "value": "test", "description": "Exact category label match" }
+              ]
+            },
+            "description": "Return only files with a specific category label."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Language ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?language=en",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "language", "value": "en", "description": "ISO 639-1 language code" }
+              ]
+            },
+            "description": "Return only files with the specified language code."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Visibility (isPublic) ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?isPublic=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "isPublic", "value": "false", "description": "true or false" }
+              ]
+            },
+            "description": "Return only files matching the visibility flag."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Filter by Linked Entity ✅",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?linkedEntityType=product&linkedEntityId=prod_001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "linkedEntityType", "value": "product",  "description": "Entity type (e.g. product, user, invoice)" },
+                { "key": "linkedEntityId",   "value": "prod_001", "description": "Entity ID" }
+              ]
+            },
+            "description": "Return all files linked to a specific entity. Both params can be used independently or together."
+          },
+          "response": []
+        },
+        {
+          "name": "List — Invalid Sort Field ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for sort', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('sort');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files?sort=invalidField",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files"],
+              "query": [
+                { "key": "sort", "value": "invalidField" }
+              ]
+            },
+            "description": "Use a disallowed sort field. Joi validation returns `400`. Allowed fields: `originalName`, `size`, `createdAt`, `updatedAt`."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "🔍 Get File by ID",
+      "item": [
+        {
+          "name": "Get File — Success ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('File object returned', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  const file = json.data;",
+                  "  pm.expect(file._id).to.be.a('string');",
+                  "  pm.expect(file.tenantId).to.equal(pm.collectionVariables.get('tenantId'));",
+                  "  pm.expect(file.originalName).to.be.a('string');",
+                  "  pm.expect(file.status).to.equal('active');",
+                  "  pm.expect(file.metadata).to.include.all.keys('description', 'tags', 'custom', 'title', 'altText', 'author', 'language', 'isPublic', 'linkedTo');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Fetch full file metadata by ID. Request is scoped to the tenant — a file from another tenant returns 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Get File — Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Not found error', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.error.code).to.equal('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000"]
+            },
+            "description": "Valid ObjectId format but no matching document. Returns `404 NOT_FOUND`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get File — Invalid ObjectId ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Invalid ID error message', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('Invalid file ID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/not-a-valid-mongo-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "not-a-valid-mongo-id"]
+            },
+            "description": "Pass a non-ObjectId string. Mongoose throws a CastError → error handler returns `400` with message `Invalid file ID: 'not-a-valid-mongo-id' is not a valid ID`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get File — Wrong Tenant (Cross-Tenant Blocked) ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 — cross-tenant lookup blocked', () => pm.response.to.have.status(404));",
+                  "pm.test('File not visible to wrong tenant', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantB}}", "description": "Using TENANT-B to look up a TENANT-A file" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Use `X-Tenant-Id: tenant-b` to request a file that belongs to `tenant-a`. The query includes `tenantId` in the filter, so the document is invisible and a `404` is returned. **Multi-tenancy isolation is enforced at the DB query level.**"
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "⬇️ Download File",
+      "item": [
+        {
+          "name": "Download — As Attachment ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Disposition: attachment', () => {",
+                  "  const disposition = pm.response.headers.get('Content-Disposition');",
+                  "  pm.expect(disposition).to.include('attachment');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "download"]
+            },
+            "description": "Streams the file with `Content-Disposition: attachment`. The browser will prompt a file save dialog."
+          },
+          "response": []
+        },
+        {
+          "name": "Download — Inline (Preview) ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Disposition: inline', () => {",
+                  "  const disposition = pm.response.headers.get('Content-Disposition');",
+                  "  pm.expect(disposition).to.include('inline');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/download?inline=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "download"],
+              "query": [
+                { "key": "inline", "value": "1", "description": "1 = open in browser, 0 = force download" }
+              ]
+            },
+            "description": "Use `?inline=1` to stream with `Content-Disposition: inline`. Images and PDFs will render in the browser."
+          },
+          "response": []
+        },
+        {
+          "name": "Download — Signed URL Redirect ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Redirect or OK (cloud storage redirects, local returns 200)', () => {",
+                  "  pm.expect([200, 302]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/download?signed=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "download"],
+              "query": [
+                { "key": "signed", "value": "1", "description": "Generates a time-limited signed URL and redirects to it" }
+              ]
+            },
+            "description": "For cloud storage (S3, GCS, R2, Azure): generates a pre-signed URL and redirects (302). For local storage: streams directly (200). Signed URL expiry is controlled by `SIGNED_URL_EXPIRY` env (default: 3600 seconds)."
+          },
+          "response": []
+        },
+        {
+          "name": "Download — File Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000", "download"]
+            },
+            "description": "Attempt to download a non-existent file ID."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "✏️ Rename File",
+      "description": "PATCH /:id/rename — Updates only the display name (originalName) of a file. The storage key on disk/cloud is unchanged.",
+      "item": [
+        {
+          "name": "Rename — Success ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('New name reflected in response', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.file.originalName).to.equal('renamed-by-postman.jpg');",
+                  "  console.log('Renamed to:', json.data.file.originalName);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",   "value": "{{tenantId}}" },
+              { "key": "X-User-Id",     "value": "{{userId}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"renamed-by-postman.jpg\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/rename",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "rename"]
+            },
+            "description": "Renames a file's display name. Only `originalName` is updated — the actual storage key (path on disk/cloud) stays unchanged. A `rename` transaction is logged."
+          },
+          "response": []
+        },
+        {
+          "name": "Rename — Missing Name ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for name', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('name');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/rename",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "rename"]
+            },
+            "description": "Send empty body. Joi requires `name` field → `400 Validation Error`."
+          },
+          "response": []
+        },
+        {
+          "name": "Rename — Name Too Long ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Length validation error', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/rename",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "rename"]
+            },
+            "description": "Name exceeds 255 characters → Joi validation returns `400`."
+          },
+          "response": []
+        },
+        {
+          "name": "Rename — Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"some-name.jpg\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000/rename",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000", "rename"]
+            },
+            "description": "Rename a non-existent file ID."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "📝 Update Metadata",
+      "description": "PATCH /:id — Updates file metadata fields: originalName, description, tags, custom. At least one field must be provided.",
+      "item": [
+        {
+          "name": "Update — Description & Tags ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Metadata updated', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.file.metadata.description).to.equal('Updated via Postman');",
+                  "  pm.expect(json.data.file.metadata.tags).to.include('invoice');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "X-User-Id",    "value": "{{userId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metadata\": {\n    \"description\": \"Updated via Postman\",\n    \"tags\": [\"invoice\", \"2025\", \"finance\"],\n    \"custom\": {\n      \"project\": \"Q1-reports\",\n      \"reviewed\": true\n    }\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Update `metadata.description`, `metadata.tags`, and `metadata.custom`. An `update_metadata` transaction is logged."
+          },
+          "response": []
+        },
+        {
+          "name": "Update — Rename via Metadata (originalName) ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('originalName updated', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.file.originalName).to.equal('contract-2025.pdf');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "X-User-Id",    "value": "{{userId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"originalName\": \"contract-2025.pdf\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Update just the display name via the metadata endpoint (alternative to the dedicated `/rename` endpoint)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update — Empty Body ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Empty body rejected', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Joi schema requires at least 1 key (`.min(1)`) → `400` on empty body."
+          },
+          "response": []
+        },
+        {
+          "name": "Update — Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"originalName\": \"ghost.jpg\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000"]
+            },
+            "description": "Update metadata of a non-existent file ID."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "🔄 Replace File Content",
+      "description": "PUT /:id/replace — Replaces the binary content of an existing file. The old version is saved into the `versions` array on the File document. Form-data key must be `file` (singular).",
+      "item": [
+        {
+          "name": "Replace — New File Content ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('File content replaced', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.file.versions).to.be.an('array').with.length.above(0);",
+                  "  console.log('Version count:', json.data.file.versions.length);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [], "description": "New file content (key must be 'file' singular)" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/replace",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "replace"]
+            },
+            "description": "Replaces the file binary. The old storage key is preserved in `versions[]` for rollback. **Field name must be `file` (singular)**, not `files`."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace — No File Provided ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error: no file', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.message).to.include('No file');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/replace",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "replace"]
+            },
+            "description": "Send multipart request with no file attached → `400 No file provided`."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace — Wrong Field Name ❌ 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Unexpected field error', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.message).to.include('Unexpected field');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": [], "description": "Wrong key: 'files' (plural) instead of 'file'" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/replace",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "replace"]
+            },
+            "description": "Use `files` (plural) instead of `file` for the replace endpoint. Multer throws `LIMIT_UNEXPECTED_FILE` → `400`."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "🗑️ Delete Files",
+      "description": "Soft delete marks the file as `status: deleted` (recoverable). Permanent delete removes the DB record AND the storage object.",
+      "item": [
+        {
+          "name": "Delete — Soft Delete ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('File marked as deleted', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.file.status).to.equal('deleted');",
+                  "  console.log('File soft-deleted. Run upload again to get a new fileId.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Soft-deletes the file (`status: 'deleted'`). The record remains in MongoDB and the storage object is NOT removed. A `delete` transaction is logged. The file will no longer appear in list or get queries."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete — Permanent Delete ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Permanent delete confirmed', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.message).to.include('permanently');",
+                  "  console.log('File permanently deleted. Upload a new file to continue testing.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/permanent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "permanent"]
+            },
+            "description": "Permanently removes the MongoDB document AND the file from storage (disk/S3/GCS/etc). All version storage keys are also removed. **This is irreversible.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete — Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000"]
+            },
+            "description": "Delete a non-existent file ID."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "📜 File Transactions (Audit Log)",
+      "description": "Every upload, rename, update, replace, and delete operation creates a transaction record. These are immutable audit-trail entries.",
+      "item": [
+        {
+          "name": "Transactions — Get History ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Transactions array returned', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data).to.be.an('array');",
+                  "  if (json.data.length > 0) {",
+                  "    const tx = json.data[0];",
+                  "    pm.expect(tx.operation).to.be.a('string');",
+                  "    pm.expect(tx.status).to.be.oneOf(['pending', 'success', 'failed']);",
+                  "    pm.expect(tx.performedBy).to.be.a('string');",
+                  "    console.log('Operations found:', json.data.map(t => t.operation).join(', '));",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}", "transactions"]
+            },
+            "description": "Returns the full audit trail for a file, sorted newest first. Each entry records: `operation` (upload / rename / update_metadata / replace / delete / permanent_delete), `status` (success / failed / pending), `performedBy`, `requestId`, `payload`, and timestamps."
+          },
+          "response": []
+        },
+        {
+          "name": "Transactions — Not Found ❌ 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/000000000000000000000000/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "000000000000000000000000", "transactions"]
+            },
+            "description": "Transactions for a non-existent file ID."
+          },
+          "response": []
+        }
+      ]
+    },
+
+    {
+      "name": "⚠️ System & Edge-Case Errors",
+      "description": "These requests test the error handling layer directly — route not found, malformed JSON, and rate limit exhaustion.",
+      "item": [
+        {
+          "name": "404 — Unknown Route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Route not found message', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('not found');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/nonexistent-route",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "nonexistent-route"]
+            },
+            "description": "Hit a route that doesn't exist. The `notFound` middleware returns `404` with `Route /api/nonexistent-route not found`."
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Malformed JSON Body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('JSON parse error', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.false;",
+                  "  pm.expect(json.message).to.include('JSON');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Tenant-Id",  "value": "{{tenantId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ this is not valid JSON }"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/{{fileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "{{fileId}}"]
+            },
+            "description": "Send malformed JSON. Express body-parser emits `entity.parse.failed` → error handler returns `400` with `Invalid JSON in request body`."
+          },
+          "response": []
+        },
+        {
+          "name": "429 — Rate Limit (Upload)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Either 201 or 429', () => {",
+                  "  pm.expect([201, 429]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 429) {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    console.log('Rate limited. Wait', pm.response.headers.get('Retry-After'), 'seconds.');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" },
+              { "key": "X-User-Id",   "value": "{{userId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "To trigger rate limiting: use Postman Runner to send this request more than `UPLOAD_RATE_LIMIT` times (default: 10) within `UPLOAD_RATE_WINDOW` ms (default: 900000 = 15 min). The `Retry-After` response header tells you when to retry.\n\nTo test immediately: set `UPLOAD_RATE_LIMIT=2` in `.env` and restart the service."
+          },
+          "response": []
+        }
+      ]
+    }
+
+  ]
+}

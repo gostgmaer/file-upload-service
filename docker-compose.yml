@@ -1,0 +1,168 @@
+version: '3.9'
+
+# ════════════════════════════════════════════════════════════════════════════════
+# Production docker-compose
+# Usage:
+#   docker compose up -d --build
+# Required secrets (set in .env or your secrets manager before starting):
+#   MONGO_PASS, MONGO_URI, AZURE_CONNECTION_STRING (or other storage creds)
+# ════════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── App ──────────────────────────────────────────────────────────────────────
+  file-upload-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Never use dev/cached layers in production
+      args:
+        - NODE_ENV=production
+    image: file-upload-service:${APP_VERSION:-latest}
+    container_name: file-upload-service
+    restart: always                        # always restart on failure (not unless-stopped)
+    ports:
+      - "${HOST_PORT:-4001}:4001"          # override HOST_PORT to put a reverse-proxy in front
+    env_file: .env                         # base config (secrets, storage creds, etc.)
+    environment:
+      NODE_ENV: production
+      # ── Scaling ──────────────────────────────────────────────────────────────
+      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-0}          # 0 = one worker per CPU core
+      REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:-30000}
+      GENERAL_RATE_LIMIT: ${GENERAL_RATE_LIMIT:-300}
+      GENERAL_RATE_WINDOW: ${GENERAL_RATE_WINDOW:-60000}
+      ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-true}
+      # Redis — shared rate-limit counters across all cluster workers / replicas
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+    volumes:
+      # Named volume for local storage fallback — irrelevant when using S3/Azure/GCS/R2
+      - uploads_data:/app/uploads
+      # Mount read-only so the container cannot write outside its own uploads dir
+      # - ./logs:/app/logs   # uncomment once structured logging is added
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1                         # set > 1 for Swarm; use REDIS_URL with replicas > 1
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+    # Harden the container at runtime
+    read_only: false                       # keep false — multer writes temp buffers
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN                             # needed for uploads dir ownership on first start
+      - SETUID
+      - SETGID
+
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: file-upload-mongo
+    restart: always
+    # Never expose Mongo to the host in production — internal network only
+    expose:
+      - "27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?MONGO_USER is required}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:?MONGO_PASS is required}
+      MONGO_INITDB_DATABASE: file_service_db
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - internal
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    security_opt:
+      - no-new-privileges:true
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: file-upload-redis
+    restart: always
+    # Internal only — never exposed to the host
+    expose:
+      - "6379"
+    command:
+      - redis-server
+      - --save 60 1000          # persist to disk every 60s if 1000+ keys changed
+      - --loglevel warning
+      - --maxmemory 128mb
+      - --maxmemory-policy allkeys-lru   # evict least-recently-used keys under memory pressure
+      - --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 192M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    security_opt:
+      - no-new-privileges:true
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+    driver: local
+  mongo_config:
+    driver: local
+  uploads_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
+    # Isolate: only containers on this network can reach each other.
+    # For Swarm overlay, change driver to: overlay
+    internal: true                        # no outbound internet from this network segment
