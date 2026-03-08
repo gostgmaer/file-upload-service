@@ -29,10 +29,35 @@ const ERROR_CODES = {
   BAD_REQUEST: 'BAD_REQUEST',
 };
 
-const sendSuccess = (res, { data = null, message = 'Success', statusCode = HTTP_STATUS.OK, meta = null } = {}) => {
-  const response = { success: true, statusCode, message };
-  if (data !== null) response.data = data;
-  if (meta !== null) response.meta = meta;
+/**
+ * Recursively transform response data:
+ *  - Renames `_id` → `id` (as string)
+ *  - Removes `__v`
+ */
+const serialize = (val) => {
+  if (val === null || val === undefined) return val;
+  if (typeof val !== 'object') return val;
+  if (val instanceof Date) return val;
+  if (Buffer.isBuffer(val)) return val;
+  if (Array.isArray(val)) return val.map(serialize);
+
+  const src = typeof val.toJSON === 'function' ? val.toJSON() : val;
+  if (typeof src !== 'object' || src === null) return src;
+
+  const out = {};
+  for (const key of Object.keys(src)) {
+    if (key === '__v' || key === '_id' || key === 'id') continue;
+    out[key] = serialize(src[key]);
+  }
+  const rawId = src.id !== undefined ? src.id : src._id;
+  if (rawId !== undefined) out.id = String(rawId);
+
+  return out;
+};
+
+const sendSuccess = (res, { data = null, message = 'Success', statusCode = HTTP_STATUS.OK } = {}) => {
+  const response = { success: true, message };
+  if (data !== null && data !== undefined) response.data = serialize(data);
   return res.status(statusCode).json(response);
 };
 
@@ -43,20 +68,13 @@ const sendError = (
     statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR,
     code = ERROR_CODES.INTERNAL_ERROR,
     details = null,
-    errors = null,
+    hint = null,
   } = {}
 ) => {
-  const response = {
-    success: false,
-    statusCode,
-    message,
-    error: { code },
-  };
-
-  if (errors !== null) response.error.errors = errors;
-  if (details !== null && process.env.NODE_ENV === 'development') response.error.details = details;
-
-  return res.status(statusCode).json(response);
+  const err = { code };
+  if (details !== null && details !== undefined) err.details = details;
+  if (hint !== null && hint !== undefined) err.hint = hint;
+  return res.status(statusCode).json({ success: false, message, error: err });
 };
 
 const sendCreated = (res, { data = null, message = 'Created successfully' } = {}) => {
@@ -72,4 +90,5 @@ module.exports = {
   sendError,
   sendCreated,
   sendNoContent,
+  serialize,
 };
