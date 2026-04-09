@@ -256,9 +256,79 @@ X-User-Role: admin
 ### Health Checks
 
 ```http
-GET /health              # General health (legacy)
+GET /                    # API information and documentation
+GET /health              # General health with metrics (legacy)
 GET /health/live         # Liveness probe (is service running?)
 GET /health/ready        # Readiness probe (can accept traffic?)
+```
+
+**Example Response (`GET /`):**
+```json
+{
+  "success": true,
+  "service": "File Upload Service",
+  "version": "1.0.0",
+  "description": "Multi-tenant file upload microservice with cloud storage support",
+  "status": "running",
+  "documentation": {
+    "health": {
+      "general": "GET /health",
+      "liveness": "GET /health/live",
+      "readiness": "GET /health/ready"
+    },
+    "api": {
+      "upload": "POST /api/files/upload",
+      "list": "GET /api/files",
+      "getFile": "GET /api/files/:id",
+      "download": "GET /api/files/:id/download"
+    }
+  },
+  "timestamp": "2026-04-09T...",
+  "statusCode": 200,
+  "requestId": "..."
+}
+```
+
+**Example Response (`GET /health`):**
+```json
+{
+  "success": true,
+  "status": "healthy",
+  "service": "file-upload-service",
+  "version": "1.0.0",
+  "uptime": 3600,
+  "environment": "development",
+  "database": {
+    "status": "connected",
+    "state": 1
+  },
+  "memory": {
+    "heapUsedMB": 45,
+    "heapTotalMB": 128,
+    "rssMB": 150,
+    "externalMB": 2
+  },
+  "process": {
+    "pid": 12345,
+    "nodeVersion": "v20.11.0"
+  }
+}
+```
+
+**Example Response (`GET /health/ready`):**
+```json
+{
+  "success": true,
+  "status": "ready",
+  "service": "file-upload-service",
+  "version": "1.0.0",
+  "checks": {
+    "mongodb": "ok",
+    "redis": "not_configured",
+    "storage": "ok"
+  },
+  "uptime": 3600
+}
 ```
 
 ---
