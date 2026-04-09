@@ -1,5 +1,13 @@
+const dns = require('dns');
+// Use public DNS to resolve MongoDB SRV records if local DNS fails
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
 const mongoose = require('mongoose');
 const { db: dbConfig } = require('./index');
+
+// Disable command buffering - ensures operations fail immediately if not connected
+// instead of timing out silently after 10s.
+mongoose.set('bufferCommands', false);
 
 /**
  * Connect to MongoDB with retry logic and event listeners
@@ -37,7 +45,10 @@ const connectDB = async (maxRetries = 5, initialDelay = 2000) => {
       });
 
       mongoose.connection.on('error', (err) => {
-        console.error('MongoDB: Connection error:', err.message);
+        console.error(`MongoDB: Connection error [${err.name}]:`, err.message);
+        if (err.name === 'MongooseServerSelectionError') {
+          console.error('Hint: Check if the MongoDB host is reachable and the IP is whitelisted.');
+        }
       });
 
       mongoose.connection.on('close', () => {
