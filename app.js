@@ -13,7 +13,7 @@ const fileRoutes = require('./src/routes/fileRoutes');
 const healthRoutes = require('./src/routes/healthRoutes');
 
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', 1); // Trust the first proxy (e.g. AWS ALB, Heroku, etc.)
 
 // Security headers
 app.use(helmet());
