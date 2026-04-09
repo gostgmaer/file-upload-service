@@ -13,6 +13,7 @@ const fileRoutes = require('./src/routes/fileRoutes');
 const healthRoutes = require('./src/routes/healthRoutes');
 
 const app = express();
+app.set('trust proxy', true);
 
 // Security headers
 app.use(helmet());
