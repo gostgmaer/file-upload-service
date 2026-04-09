@@ -1,3 +1,7 @@
+const dns = require('dns');
+// Use public DNS to resolve MongoDB SRV records if local DNS fails
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
 const mongoose = require('mongoose');
 const { db: dbConfig } = require('./index');
 
