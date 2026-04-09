@@ -11,11 +11,13 @@ const router = express.Router();
  */
 router.get('/live', (req, res) => {
   res.status(200).json({
+    success: true,
     status: 'alive',
     service: 'file-upload-service',
     version,
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
+    pid: process.pid
   });
 });
 
@@ -84,11 +86,13 @@ router.get('/ready', async (req, res) => {
   }
 
   res.status(allHealthy ? 200 : 503).json({
+    success: allHealthy,
     status: allHealthy ? 'ready' : 'not_ready',
     service: 'file-upload-service',
     version,
     checks,
     timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime())
   });
 });
 
@@ -97,23 +101,45 @@ router.get('/ready', async (req, res) => {
  * Includes basic system metrics
  */
 router.get('/', async (req, res) => {
-  const dbState = mongoose.connection.readyState;
-  const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
-  const mem = process.memoryUsage();
+  try {
+    const dbState = mongoose.connection.readyState;
+    const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
+    const mem = process.memoryUsage();
+    const isHealthy = dbState === 1;
 
-  res.status(dbState === 1 ? 200 : 503).json({
-    status: dbState === 1 ? 'ok' : 'degraded',
-    service: 'file-upload-service',
-    version,
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-    db: dbStatus,
-    memory: {
-      heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
-      heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
-      rssMB: Math.round(mem.rss / 1024 / 1024),
-    },
-  });
+    res.status(isHealthy ? 200 : 503).json({
+      success: isHealthy,
+      status: isHealthy ? 'healthy' : 'degraded',
+      service: 'file-upload-service',
+      version,
+      timestamp: new Date().toISOString(),
+      uptime: Math.floor(process.uptime()),
+      environment: process.env.NODE_ENV || 'development',
+      database: {
+        status: dbStatus,
+        state: dbState
+      },
+      memory: {
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+        rssMB: Math.round(mem.rss / 1024 / 1024),
+        externalMB: Math.round(mem.external / 1024 / 1024)
+      },
+      process: {
+        pid: process.pid,
+        nodeVersion: process.version
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      status: 'error',
+      service: 'file-upload-service',
+      version,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 module.exports = router;

@@ -41,7 +41,13 @@ const handleJsonParseError = () => {
 };
 
 const notFound = (req, res, next) => {
-  next(AppError.notFound(`Route ${req.originalUrl} not found`));
+  const error = AppError.notFound(`Route ${req.method} ${req.originalUrl} not found`);
+  error.availableRoutes = {
+    root: 'GET /',
+    health: 'GET /health, GET /health/live, GET /health/ready',
+    api: 'POST /api/files/upload, GET /api/files, GET /api/files/:id'
+  };
+  next(error);
 };
 
 const globalErrorHandler = (err, req, res, _next) => {

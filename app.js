@@ -88,6 +88,34 @@ app.use((req, res, next) => {
 // ─── Tenant & user context ───────────────────────────────────────────────────
 app.use(tenantMiddleware);
 
+// Root route — API information
+app.get('/', (req, res) => {
+  const { version } = require('./package.json');
+  res.json({
+    success: true,
+    service: 'File Upload Service',
+    version,
+    description: 'Multi-tenant file upload microservice with cloud storage support',
+    status: 'running',
+    documentation: {
+      health: {
+        general: 'GET /health',
+        liveness: 'GET /health/live',
+        readiness: 'GET /health/ready'
+      },
+      api: {
+        upload: 'POST /api/files/upload',
+        list: 'GET /api/files',
+        getFile: 'GET /api/files/:id',
+        download: 'GET /api/files/:id/download',
+        update: 'PATCH /api/files/:id',
+        delete: 'DELETE /api/files/:id'
+      }
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health check — no tenant required, no rate limit
 app.use('/health', healthRoutes);
 
