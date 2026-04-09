@@ -25,6 +25,7 @@ const {
   validateBulkSignedUrls,
 } = require('../controllers/validation');
 const { uploadRateLimiter } = require('../middleware/rateLimit');
+const { allowPublic, requireAuth, requireAdmin } = require('../middleware/rbac');
 const { storage } = require('../config');
 
 const router = express.Router();
@@ -42,61 +43,131 @@ const upload = multer({
   },
 });
 
-// ─── Upload ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// PUBLIC ENDPOINTS (No authentication required - works standalone)
+// Anyone can upload, view, download files without authentication
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Upload files - PUBLIC
 router.post(
   '/upload',
   uploadRateLimiter,
   upload.array('files', 10),
   validateFile,
   validateUpload,
+  allowPublic,
   uploadFiles
 );
 
-// ─── Bulk operations (must be before /:id routes to avoid param conflicts) ───
-// Bulk soft-delete by array of IDs
-router.post('/bulk/delete', validateBulkDelete, bulkDelete);
+// List files - PUBLIC
+router.get(
+  '/',
+  validateQuery,
+  allowPublic,
+  getFiles
+);
 
-// Bulk permanent-delete by array of IDs
-router.post('/bulk/permanent-delete', validateBulkDelete, bulkDelete);
+// Get file metadata - PUBLIC
+router.get(
+  '/:id',
+  allowPublic,
+  getFileById
+);
 
-// Bulk metadata update — apply the same patch to multiple files
-router.patch('/bulk/metadata', validateBulkMetadata, bulkUpdateMetadata);
+// Download file - PUBLIC
+router.get(
+  '/:id/download',
+  allowPublic,
+  downloadFile
+);
 
-// Bulk signed URL generation
-router.post('/bulk/signed-urls', validateBulkSignedUrls, bulkGetSignedUrls);
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTHENTICATED ENDPOINTS (Requires user or admin role)
+// Pass X-User-Role: user or admin (with gateway or directly)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ─── Single-file CRUD ─────────────────────────────────────────────────────────
-// List files with filtering and pagination
-router.get('/', validateQuery, getFiles);
+// Update file metadata - Authenticated users
+router.patch(
+  '/:id',
+  validateUpdate,
+  requireAuth,
+  updateFileMetadata
+);
 
-// Get single file metadata
-router.get('/:id', getFileById);
+// Rename file - Authenticated users
+router.patch(
+  '/:id/rename',
+  validateRename,
+  requireAuth,
+  renameFile
+);
 
-// Download file
-router.get('/:id/download', downloadFile);
-
-// Rename file
-router.patch('/:id/rename', validateRename, renameFile);
-
-// Update file metadata
-router.patch('/:id', validateUpdate, updateFileMetadata);
-
-// Replace file content
+// Replace file content - Authenticated users
 router.put(
   '/:id/replace',
   uploadRateLimiter,
   upload.single('file'),
   validateFile,
+  requireAuth,
   replaceFileContent
 );
 
-// Soft delete
-router.delete('/:id', deleteFile);
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN ENDPOINTS (Requires admin role)
+// Pass X-User-Role: admin (with gateway or directly)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Permanent delete
-router.delete('/:id/permanent', deleteFile);
+// Soft delete - ADMIN ONLY
+router.delete(
+  '/:id',
+  requireAdmin,
+  deleteFile
+);
 
-// Get file transaction history
-router.get('/:id/transactions', getFileTransactions);
+// Permanent delete - ADMIN ONLY
+router.delete(
+  '/:id/permanent',
+  requireAdmin,
+  deleteFile
+);
+
+// Get file transaction history - ADMIN ONLY
+router.get(
+  '/:id/transactions',
+  requireAdmin,
+  getFileTransactions
+);
+
+// Bulk soft-delete - ADMIN ONLY
+router.post(
+  '/bulk/delete',
+  validateBulkDelete,
+  requireAdmin,
+  bulkDelete
+);
+
+// Bulk permanent-delete - ADMIN ONLY
+router.post(
+  '/bulk/permanent-delete',
+  validateBulkDelete,
+  requireAdmin,
+  bulkDelete
+);
+
+// Bulk metadata update - ADMIN ONLY
+router.patch(
+  '/bulk/metadata',
+  validateBulkMetadata,
+  requireAdmin,
+  bulkUpdateMetadata
+);
+
+// Bulk signed URL generation - ADMIN ONLY
+router.post(
+  '/bulk/signed-urls',
+  validateBulkSignedUrls,
+  requireAdmin,
+  bulkGetSignedUrls
+);
 
 module.exports = router;

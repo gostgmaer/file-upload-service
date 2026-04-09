@@ -6,6 +6,7 @@ const compression = require('compression');
 const { server: serverConfig, scaling } = require('./src/config');
 
 const { tenantMiddleware } = require('./src/middleware/tenant');
+const { verifyGatewaySignature } = require('./src/middleware/rbac');
 const { notFound, globalErrorHandler } = require('./src/middleware/errorHandler');
 const { generalRateLimiter } = require('./src/middleware/rateLimit');
 const fileRoutes = require('./src/routes/fileRoutes');
@@ -37,7 +38,17 @@ app.use(
       callback(new Error(`CORS: origin '${origin}' is not allowed`));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-Tenant-Id', 'X-User-Id', 'X-User-Role', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Request-Id',
+      'X-Tenant-Id',
+      'X-User-Id',
+      'X-User-Email',
+      'X-User-Role',
+      'X-User-Name',
+      'X-Gateway-HMAC',
+    ],
   })
 );
 
@@ -63,14 +74,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Gateway signature verification (HMAC) ────────────────────────────────────
+// OPTIONAL: Verifies X-User-* headers if gateway secret is configured
+// Works standalone without API Gateway - HMAC is optional
+// Skip for health checks
+app.use((req, res, next) => {
+  if (req.path.startsWith('/health')) {
+    return next();
+  }
+  verifyGatewaySignature(req, res, next);
+});
+
+// ─── Tenant & user context ───────────────────────────────────────────────────
+app.use(tenantMiddleware);
+
 // Health check — no tenant required, no rate limit
 app.use('/health', healthRoutes);
 
 // Global API rate limiter — all /api routes (configurable: GENERAL_RATE_LIMIT / GENERAL_RATE_WINDOW)
 app.use('/api', generalRateLimiter);
-
-// Apply tenant middleware globally to all API routes
-app.use('/api', tenantMiddleware);
 
 // API routes
 app.use('/api/files', fileRoutes);

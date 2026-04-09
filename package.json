@@ -10,7 +10,9 @@
     "debug:dev": "nodemon --inspect=9231 server.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest tests/integration",
+    "install:deps": "pnpm install && pnpm add file-type@^19.0.0 express@^4.21.2"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.782.0",
@@ -20,7 +22,7 @@
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^5.1.0",
+    "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.10.0",
