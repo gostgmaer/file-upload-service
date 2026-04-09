@@ -165,4 +165,4 @@ networks:
     driver: bridge
     # Isolate: only containers on this network can reach each other.
     # For Swarm overlay, change driver to: overlay
-    internal: true                        # no outbound internet from this network segment
+    # internal: true                        # no outbound internet from this network segment
