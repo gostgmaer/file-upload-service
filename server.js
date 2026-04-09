@@ -46,6 +46,8 @@ const start = async () => {
     // Per-request timeout — prevents slow clients from holding connections indefinitely
     if (scaling.requestTimeoutMs > 0) {
       httpServer.timeout = scaling.requestTimeoutMs;
+      httpServer.keepAliveTimeout = scaling.requestTimeoutMs + 5000;
+      httpServer.headersTimeout = scaling.requestTimeoutMs + 10000;
     }
   } catch (error) {
     console.error('Failed to start server:', error.message);

@@ -20,7 +20,7 @@ const scaling = {
   // 0 = auto (use all CPU cores), 1 = single process (default)
   clusterWorkers: _int(process.env.CLUSTER_WORKERS, 1),
   // Max milliseconds a request can be in-flight before the socket is forcibly closed
-  requestTimeoutMs: _int(process.env.REQUEST_TIMEOUT_MS, 30000),
+  requestTimeoutMs: _int(process.env.REQUEST_TIMEOUT_MS, 72000),
   // General API rate limit applied to ALL routes (per IP)
   generalRateLimit: _int(process.env.GENERAL_RATE_LIMIT, 300),
   generalRateWindow: _int(process.env.GENERAL_RATE_WINDOW, 60000), // 1 min
