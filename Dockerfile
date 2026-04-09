@@ -1,9 +1,12 @@
 FROM node:20-alpine
 WORKDIR /app
 
+# Install pnpm using corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 # Install production deps first (layer cache-friendly)
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy source
 COPY . .
