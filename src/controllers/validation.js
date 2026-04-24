@@ -167,4 +167,105 @@ const validateBulkSignedUrls = (req, res, next) => {
   next();
 };
 
-module.exports = { validateUpload, validateUpdate, validateQuery, validateRename, validateBulkDelete, validateBulkMetadata, validateBulkSignedUrls };
+// ─── Presigned upload validation ──────────────────────────────────────────────
+
+const metadataFields = {
+  category: Joi.string().max(100).optional(),
+  description: Joi.string().max(1000).optional(),
+  tags: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string().max(50))).optional(),
+  custom: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
+  title: Joi.string().max(255).optional(),
+  altText: Joi.string().max(500).optional(),
+  author: Joi.string().max(255).optional(),
+  source: Joi.string().max(500).optional(),
+  language: Joi.string().max(10).optional(),
+  expiresAt: Joi.date().iso().greater('now').optional(),
+  isPublic: Joi.boolean().optional(),
+  linkedEntityType: Joi.string().max(100).optional(),
+  linkedEntityId: Joi.string().max(255).optional(),
+};
+
+const validatePresignedUpload = (req, res, next) => {
+  const schema = Joi.object({
+    filename: Joi.string().max(255).required(),
+    contentType: Joi.string().max(100).required(),
+    size: Joi.number().integer().min(1).required(),
+    expiresIn: Joi.number().integer().min(60).max(604800).optional(),
+    ...metadataFields,
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  next();
+};
+
+const validateInitiateMultipart = (req, res, next) => {
+  const schema = Joi.object({
+    filename: Joi.string().max(255).required(),
+    contentType: Joi.string().max(100).required(),
+    size: Joi.number().integer().min(1).required(),
+    ...metadataFields,
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  next();
+};
+
+const validateGetPartUrls = (req, res, next) => {
+  const schema = Joi.object({
+    partNumbers: Joi.array()
+      .items(Joi.number().integer().min(1).max(10000))
+      .min(1)
+      .max(1000)
+      .required(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  next();
+};
+
+const validateCompleteMultipart = (req, res, next) => {
+  const schema = Joi.object({
+    parts: Joi.array()
+      .items(
+        Joi.object({
+          partNumber: Joi.number().integer().min(1).max(10000).required(),
+          etag: Joi.string().required(),
+        })
+      )
+      .min(1)
+      .required(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ success: false, message: error.details[0].message });
+  }
+
+  next();
+};
+
+module.exports = {
+  validateUpload,
+  validateUpdate,
+  validateQuery,
+  validateRename,
+  validateBulkDelete,
+  validateBulkMetadata,
+  validateBulkSignedUrls,
+  validatePresignedUpload,
+  validateInitiateMultipart,
+  validateGetPartUrls,
+  validateCompleteMultipart,
+};

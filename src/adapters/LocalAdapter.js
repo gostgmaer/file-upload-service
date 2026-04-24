@@ -75,6 +75,26 @@ class LocalAdapter extends StorageAdapter {
     const stat = fs.statSync(fullPath);
     return { size: stat.size, lastModified: stat.mtime };
   }
+
+  async getPresignedUploadUrl() {
+    throw new Error('Presigned upload is not supported for local storage.');
+  }
+
+  async initiateMultipartUpload() {
+    throw new Error('Multipart upload is not supported for local storage.');
+  }
+
+  async getPresignedPartUrls() {
+    throw new Error('Multipart upload is not supported for local storage.');
+  }
+
+  async completeMultipartUpload() {
+    throw new Error('Multipart upload is not supported for local storage.');
+  }
+
+  async abortMultipartUpload() {
+    throw new Error('Multipart upload is not supported for local storage.');
+  }
 }
 
 module.exports = new LocalAdapter();

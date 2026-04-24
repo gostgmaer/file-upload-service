@@ -38,8 +38,12 @@ const fileSchema = new mongoose.Schema(
     versions: [versionSchema],
     status: {
       type: String,
-      enum: ['active', 'deleted', 'archived'],
+      enum: ['active', 'deleted', 'archived', 'pending'],
       default: 'active',
+    },
+    pendingUpload: {
+      uploadId: { type: String },       // S3/R2 multipart upload ID
+      expiresAt: { type: Date },        // When the presigned URL / multipart session expires
     },
   },
   { timestamps: true }
