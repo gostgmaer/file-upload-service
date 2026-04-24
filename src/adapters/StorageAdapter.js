@@ -32,6 +32,28 @@ class StorageAdapter {
   async getMetadata(destinationPath) {
     throw new Error('getMetadata method must be implemented');
   }
+
+  // ─── Presigned upload (single PUT) ────────────────────────────────────────
+  async getPresignedUploadUrl(destinationPath, options = {}) {
+    throw new Error('getPresignedUploadUrl method must be implemented');
+  }
+
+  // ─── Multipart upload (S3/R2 only) ────────────────────────────────────────
+  async initiateMultipartUpload(destinationPath, options = {}) {
+    throw new Error('initiateMultipartUpload method must be implemented');
+  }
+
+  async getPresignedPartUrls(destinationPath, uploadId, partNumbers) {
+    throw new Error('getPresignedPartUrls method must be implemented');
+  }
+
+  async completeMultipartUpload(destinationPath, uploadId, parts) {
+    throw new Error('completeMultipartUpload method must be implemented');
+  }
+
+  async abortMultipartUpload(destinationPath, uploadId) {
+    throw new Error('abortMultipartUpload method must be implemented');
+  }
 }
 
 module.exports = StorageAdapter;

@@ -281,6 +281,123 @@ const bulkGetSignedUrls = catchAsync(async (req, res) => {
   });
 });
 
+// ─── Presigned upload handlers ────────────────────────────────────────────────
+
+const requestPresignedUpload = catchAsync(async (req, res) => {
+  const tenantId = req.tenantId;
+  const userId = req.headers['x-user-id'] || null;
+  const { filename, contentType, size, expiresIn, ...rest } = req.body;
+
+  const metadata = {
+    category: rest.category || '',
+    description: rest.description || '',
+    tags: rest.tags
+      ? Array.isArray(rest.tags)
+        ? rest.tags
+        : [rest.tags]
+      : [],
+    custom: rest.custom ? (typeof rest.custom === 'string' ? JSON.parse(rest.custom) : rest.custom) : {},
+    title: rest.title || '',
+    altText: rest.altText || '',
+    author: rest.author || '',
+    source: rest.source || '',
+    language: rest.language || '',
+    expiresAt: rest.expiresAt || null,
+    isPublic: rest.isPublic === true || rest.isPublic === 'true',
+    linkedTo: {
+      entityType: rest.linkedEntityType || '',
+      entityId: rest.linkedEntityId || '',
+    },
+  };
+
+  const result = await fileService.getPresignedUploadUrl(
+    filename,
+    contentType,
+    size,
+    userId,
+    tenantId,
+    metadata,
+    expiresIn || 3600
+  );
+
+  return sendSuccess(res, { data: result, message: 'Presigned upload URL generated', statusCode: HTTP_STATUS.CREATED });
+});
+
+const confirmPresignedUpload = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.tenantId;
+  const userId = req.headers['x-user-id'] || null;
+
+  const file = await fileService.confirmPresignedUpload(id, tenantId, userId);
+
+  return sendSuccess(res, { data: formatFile(file), message: 'Upload confirmed successfully' });
+});
+
+// ─── Multipart upload handlers ────────────────────────────────────────────────
+
+const initiateMultipartUpload = catchAsync(async (req, res) => {
+  const tenantId = req.tenantId;
+  const userId = req.headers['x-user-id'] || null;
+  const { filename, contentType, size, ...rest } = req.body;
+
+  const metadata = {
+    category: rest.category || '',
+    description: rest.description || '',
+    tags: rest.tags
+      ? Array.isArray(rest.tags)
+        ? rest.tags
+        : [rest.tags]
+      : [],
+    custom: rest.custom ? (typeof rest.custom === 'string' ? JSON.parse(rest.custom) : rest.custom) : {},
+    title: rest.title || '',
+    altText: rest.altText || '',
+    author: rest.author || '',
+    source: rest.source || '',
+    language: rest.language || '',
+    expiresAt: rest.expiresAt || null,
+    isPublic: rest.isPublic === true || rest.isPublic === 'true',
+    linkedTo: {
+      entityType: rest.linkedEntityType || '',
+      entityId: rest.linkedEntityId || '',
+    },
+  };
+
+  const result = await fileService.initiateMultipartUpload(filename, contentType, size, userId, tenantId, metadata);
+
+  return sendSuccess(res, { data: result, message: 'Multipart upload initiated', statusCode: HTTP_STATUS.CREATED });
+});
+
+const getMultipartPartUrls = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.tenantId;
+  const { partNumbers } = req.body;
+
+  const result = await fileService.getPresignedPartUrls(id, tenantId, partNumbers);
+
+  return sendSuccess(res, { data: result, message: 'Part URLs generated' });
+});
+
+const completeMultipartUpload = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.tenantId;
+  const userId = req.headers['x-user-id'] || null;
+  const { parts } = req.body;
+
+  const file = await fileService.completeMultipartUpload(id, tenantId, userId, parts);
+
+  return sendSuccess(res, { data: formatFile(file), message: 'Multipart upload completed successfully' });
+});
+
+const abortMultipartUpload = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.tenantId;
+  const userId = req.headers['x-user-id'] || null;
+
+  const result = await fileService.abortMultipartUpload(id, tenantId, userId);
+
+  return sendSuccess(res, { data: result, message: 'Multipart upload aborted' });
+});
+
 module.exports = {
   uploadFiles,
   getFiles,
@@ -294,4 +411,10 @@ module.exports = {
   bulkDelete,
   bulkUpdateMetadata,
   bulkGetSignedUrls,
+  requestPresignedUpload,
+  confirmPresignedUpload,
+  initiateMultipartUpload,
+  getMultipartPartUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
 };
