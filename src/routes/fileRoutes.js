@@ -13,6 +13,12 @@ const {
   bulkDelete,
   bulkUpdateMetadata,
   bulkGetSignedUrls,
+  requestPresignedUpload,
+  confirmPresignedUpload,
+  initiateMultipartUpload,
+  getMultipartPartUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
 } = require('../controllers/fileController');
 const validateFile = require('../controllers/validateFile');
 const {
@@ -23,6 +29,10 @@ const {
   validateBulkDelete,
   validateBulkMetadata,
   validateBulkSignedUrls,
+  validatePresignedUpload,
+  validateInitiateMultipart,
+  validateGetPartUrls,
+  validateCompleteMultipart,
 } = require('../controllers/validation');
 const { uploadRateLimiter } = require('../middleware/rateLimit');
 const { allowPublic, requireAuth, requireAdmin } = require('../middleware/rbac');
@@ -168,6 +178,61 @@ router.post(
   validateBulkSignedUrls,
   requireAdmin,
   bulkGetSignedUrls
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRESIGNED UPLOAD — client uploads directly to cloud storage
+// Supported adapters: S3, R2 (multipart + single), GCS, Azure (single only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Step 1: Request a presigned PUT URL (single upload, any size the adapter supports)
+router.post(
+  '/upload/presign',
+  uploadRateLimiter,
+  validatePresignedUpload,
+  requireAuth,
+  requestPresignedUpload
+);
+
+// Step 2: Confirm the upload completed (client calls after successful PUT)
+router.post(
+  '/upload/presign/:id/confirm',
+  requireAuth,
+  confirmPresignedUpload
+);
+
+// ─── Multipart upload (S3 / R2 — recommended for files > 100 MB) ──────────
+
+// Step 1: Initiate multipart upload — returns fileId + uploadId
+router.post(
+  '/upload/multipart/initiate',
+  uploadRateLimiter,
+  validateInitiateMultipart,
+  requireAuth,
+  initiateMultipartUpload
+);
+
+// Step 2: Get presigned URLs for each part (5 MB minimum per part except last)
+router.post(
+  '/upload/multipart/:id/parts',
+  validateGetPartUrls,
+  requireAuth,
+  getMultipartPartUrls
+);
+
+// Step 3: Complete — assemble all parts on the storage side
+router.post(
+  '/upload/multipart/:id/complete',
+  validateCompleteMultipart,
+  requireAuth,
+  completeMultipartUpload
+);
+
+// Abort — cleans up the multipart session and removes the pending record
+router.delete(
+  '/upload/multipart/:id/abort',
+  requireAuth,
+  abortMultipartUpload
 );
 
 module.exports = router;

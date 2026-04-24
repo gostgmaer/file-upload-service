@@ -132,6 +132,40 @@ class GCSAdapter extends StorageAdapter {
       throw new Error(`GCS metadata fetch failed: ${error.message}`);
     }
   }
+
+  // ─── Presigned single PUT upload ──────────────────────────────────────────
+  async getPresignedUploadUrl(destinationPath, options = {}) {
+    try {
+      const expiry = options.expiry || 3600;
+      const file = this.bucket.file(destinationPath);
+      const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + expiry * 1000,
+        contentType: options.contentType || 'application/octet-stream',
+      });
+      return url;
+    } catch (error) {
+      throw new Error(`GCS presigned upload URL generation failed: ${error.message}`);
+    }
+  }
+
+  // ─── Multipart upload (not supported on GCS) ──────────────────────────────
+  async initiateMultipartUpload() {
+    throw new Error('Multipart upload is not supported for GCS. Use presigned single upload instead.');
+  }
+
+  async getPresignedPartUrls() {
+    throw new Error('Multipart upload is not supported for GCS. Use presigned single upload instead.');
+  }
+
+  async completeMultipartUpload() {
+    throw new Error('Multipart upload is not supported for GCS. Use presigned single upload instead.');
+  }
+
+  async abortMultipartUpload() {
+    throw new Error('Multipart upload is not supported for GCS. Use presigned single upload instead.');
+  }
 }
 
 module.exports = GCSAdapter;

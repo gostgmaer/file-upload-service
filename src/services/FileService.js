@@ -466,6 +466,267 @@ class FileService {
 
     return { succeeded, failed };
   }
+
+  // ─── Presigned upload (single PUT) ─────────────────────────────────────────
+
+  /**
+   * Generate a presigned PUT URL so the client can upload directly to storage.
+   * Creates a File record with status='pending' immediately.
+   * Client must call confirmPresignedUpload() after the PUT succeeds.
+   */
+  async getPresignedUploadUrl(filename, contentType, size, userId, tenantId, metadata = {}, expirySeconds = 3600) {
+    const requestId = uuidv4();
+    const storageKey = this.generateStorageKey(filename, userId || 'anonymous', tenantId);
+    const extension = path.extname(filename).toLowerCase();
+
+    const uploadUrl = await this.storageAdapter.getPresignedUploadUrl(storageKey, {
+      contentType,
+      contentLength: size,
+      expiry: expirySeconds,
+    });
+
+    const file = new File({
+      tenantId,
+      originalName: filename,
+      storageKey,
+      size,
+      mimeType: contentType,
+      extension,
+      uploader: userId || 'anonymous',
+      publicUrl: '',
+      category: metadata.category || '',
+      metadata: {
+        description: metadata.description || '',
+        tags: metadata.tags || [],
+        custom: metadata.custom || {},
+        title: metadata.title || '',
+        altText: metadata.altText || '',
+        author: metadata.author || '',
+        source: metadata.source || '',
+        language: metadata.language || '',
+        expiresAt: metadata.expiresAt || null,
+        isPublic: metadata.isPublic || false,
+        linkedTo: metadata.linkedTo || {},
+      },
+      status: 'pending',
+      pendingUpload: {
+        expiresAt: new Date(Date.now() + expirySeconds * 1000),
+      },
+    });
+
+    await file.save();
+
+    await this.logTransaction(tenantId, file._id, 'presign_upload_init', userId, requestId, {
+      originalName: filename,
+      size,
+      mimeType: contentType,
+    });
+
+    return {
+      fileId: file._id,
+      storageKey,
+      uploadUrl,
+      expiresIn: expirySeconds,
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+    };
+  }
+
+  /**
+   * Confirm that a presigned PUT upload has completed.
+   * Verifies the object exists in storage, then marks the file record active.
+   */
+  async confirmPresignedUpload(fileId, tenantId, userId) {
+    const requestId = uuidv4();
+
+    const file = await File.findOne({ _id: fileId, tenantId, status: 'pending' });
+    if (!file) throw AppError.notFound('Pending upload not found');
+
+    if (file.pendingUpload?.expiresAt && new Date() > file.pendingUpload.expiresAt) {
+      throw AppError.badRequest('Presigned upload URL has expired');
+    }
+
+    // Verify the object actually landed in storage
+    let storageMetadata;
+    try {
+      storageMetadata = await this.storageAdapter.getMetadata(file.storageKey);
+    } catch {
+      throw AppError.badRequest('File not found in storage. Ensure the upload completed before confirming.');
+    }
+
+    const publicUrl = this._buildPublicUrl(file.storageKey);
+
+    const updatedFile = await File.findOneAndUpdate(
+      { _id: fileId, tenantId },
+      {
+        status: 'active',
+        publicUrl,
+        size: storageMetadata.size || file.size,
+        $unset: { pendingUpload: '' },
+      },
+      { new: true }
+    );
+
+    await this.logTransaction(tenantId, fileId, 'presign_upload_confirm', userId, requestId, {
+      storageKey: file.storageKey,
+      size: storageMetadata.size,
+    });
+
+    return updatedFile;
+  }
+
+  // ─── Multipart presigned upload (S3 / R2 only) ─────────────────────────────
+
+  /**
+   * Initiate a multipart upload. Creates a pending File record and starts the
+   * S3 multipart session. Returns the uploadId needed for part uploads.
+   */
+  async initiateMultipartUpload(filename, contentType, size, userId, tenantId, metadata = {}) {
+    const requestId = uuidv4();
+    const storageKey = this.generateStorageKey(filename, userId || 'anonymous', tenantId);
+    const extension = path.extname(filename).toLowerCase();
+
+    const { uploadId } = await this.storageAdapter.initiateMultipartUpload(storageKey, { contentType });
+
+    const file = new File({
+      tenantId,
+      originalName: filename,
+      storageKey,
+      size,
+      mimeType: contentType,
+      extension,
+      uploader: userId || 'anonymous',
+      publicUrl: '',
+      category: metadata.category || '',
+      metadata: {
+        description: metadata.description || '',
+        tags: metadata.tags || [],
+        custom: metadata.custom || {},
+        title: metadata.title || '',
+        altText: metadata.altText || '',
+        author: metadata.author || '',
+        source: metadata.source || '',
+        language: metadata.language || '',
+        expiresAt: metadata.expiresAt || null,
+        isPublic: metadata.isPublic || false,
+        linkedTo: metadata.linkedTo || {},
+      },
+      status: 'pending',
+      pendingUpload: {
+        uploadId,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24-hour window
+      },
+    });
+
+    await file.save();
+
+    await this.logTransaction(tenantId, file._id, 'multipart_upload_init', userId, requestId, {
+      originalName: filename,
+      size,
+      mimeType: contentType,
+      uploadId,
+    });
+
+    return { fileId: file._id, storageKey, uploadId };
+  }
+
+  /**
+   * Return presigned URLs for the requested part numbers of an in-progress multipart upload.
+   */
+  async getPresignedPartUrls(fileId, tenantId, partNumbers) {
+    const file = await File.findOne({ _id: fileId, tenantId, status: 'pending' });
+    if (!file) throw AppError.notFound('Pending multipart upload not found');
+    if (!file.pendingUpload?.uploadId) throw AppError.badRequest('No active multipart upload for this file');
+
+    const parts = await this.storageAdapter.getPresignedPartUrls(
+      file.storageKey,
+      file.pendingUpload.uploadId,
+      partNumbers
+    );
+
+    return { fileId, storageKey: file.storageKey, uploadId: file.pendingUpload.uploadId, parts };
+  }
+
+  /**
+   * Complete the multipart upload. Marks the file record as active.
+   */
+  async completeMultipartUpload(fileId, tenantId, userId, parts) {
+    const requestId = uuidv4();
+
+    const file = await File.findOne({ _id: fileId, tenantId, status: 'pending' });
+    if (!file) throw AppError.notFound('Pending multipart upload not found');
+    if (!file.pendingUpload?.uploadId) throw AppError.badRequest('No active multipart upload for this file');
+
+    const result = await this.storageAdapter.completeMultipartUpload(
+      file.storageKey,
+      file.pendingUpload.uploadId,
+      parts
+    );
+
+    const publicUrl = result.location || this._buildPublicUrl(file.storageKey);
+
+    const updatedFile = await File.findOneAndUpdate(
+      { _id: fileId, tenantId },
+      { status: 'active', publicUrl, $unset: { pendingUpload: '' } },
+      { new: true }
+    );
+
+    await this.logTransaction(tenantId, fileId, 'multipart_upload_complete', userId, requestId, {
+      storageKey: file.storageKey,
+      etag: result.etag,
+    });
+
+    return updatedFile;
+  }
+
+  /**
+   * Abort an in-progress multipart upload and remove the pending file record.
+   */
+  async abortMultipartUpload(fileId, tenantId, userId) {
+    const requestId = uuidv4();
+
+    const file = await File.findOne({ _id: fileId, tenantId, status: 'pending' });
+    if (!file) throw AppError.notFound('Pending multipart upload not found');
+
+    if (file.pendingUpload?.uploadId) {
+      try {
+        await this.storageAdapter.abortMultipartUpload(file.storageKey, file.pendingUpload.uploadId);
+      } catch {
+        // Best-effort: remove the DB record regardless
+      }
+    }
+
+    await File.findOneAndDelete({ _id: fileId, tenantId });
+
+    await this.logTransaction(tenantId, fileId, 'multipart_upload_abort', userId, requestId, {
+      storageKey: file.storageKey,
+    });
+
+    return { message: 'Multipart upload aborted' };
+  }
+
+  // ─── Internal helpers ───────────────────────────────────────────────────────
+
+  _buildPublicUrl(storageKey) {
+    const adapter = process.env.STORAGE_ADAPTER || 'local';
+    if (adapter === 's3') {
+      const { storage: storageConfig } = require('../config');
+      return `https://${storageConfig.s3.bucket}.s3.${storageConfig.s3.region}.amazonaws.com/${storageKey}`;
+    }
+    if (adapter === 'r2') {
+      const { storage: storageConfig } = require('../config');
+      return `${storageConfig.r2.publicDomain}/${storageConfig.r2.bucket}/${storageKey}`;
+    }
+    if (adapter === 'gcs') {
+      const { storage: storageConfig } = require('../config');
+      return `gs://${storageConfig.gcs.bucket}/${storageKey}`;
+    }
+    if (adapter === 'azure') {
+      const { storage: storageConfig } = require('../config');
+      return `https://${storageConfig.azure.connectionString.match(/AccountName=([^;]+)/)?.[1]}.blob.core.windows.net/${storageConfig.azure.container}/${storageKey}`;
+    }
+    return `/${storageKey}`;
+  }
 }
 
 module.exports = FileService;
