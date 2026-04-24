@@ -135,6 +135,42 @@ class AzureAdapter extends StorageAdapter {
       throw new Error(`Azure metadata fetch failed: ${error.message}`);
     }
   }
+
+  // ─── Presigned single PUT upload (SAS token with write permission) ─────────
+  async getPresignedUploadUrl(destinationPath, options = {}) {
+    try {
+      const expiry = options.expiry || 3600;
+      const blobClient = this.containerClient.getBlockBlobClient(destinationPath);
+      const expiresOn = new Date(Date.now() + expiry * 1000);
+
+      const url = await blobClient.generateSasUrl({
+        permissions: 'cw',
+        expiresOn,
+        ...(options.contentType && { contentType: options.contentType }),
+      });
+
+      return url;
+    } catch (error) {
+      throw new Error(`Azure presigned upload URL generation failed: ${error.message}`);
+    }
+  }
+
+  // ─── Multipart upload (not supported for Azure via presigned flow) ─────────
+  async initiateMultipartUpload() {
+    throw new Error('Multipart presigned upload is not supported for Azure. Use presigned single upload instead.');
+  }
+
+  async getPresignedPartUrls() {
+    throw new Error('Multipart presigned upload is not supported for Azure. Use presigned single upload instead.');
+  }
+
+  async completeMultipartUpload() {
+    throw new Error('Multipart presigned upload is not supported for Azure. Use presigned single upload instead.');
+  }
+
+  async abortMultipartUpload() {
+    throw new Error('Multipart presigned upload is not supported for Azure. Use presigned single upload instead.');
+  }
 }
 
 module.exports = AzureAdapter;
