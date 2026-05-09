@@ -2,7 +2,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install pnpm using corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 # Install production deps first (layer cache-friendly)
 COPY package.json pnpm-lock.yaml ./
