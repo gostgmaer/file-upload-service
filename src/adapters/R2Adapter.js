@@ -28,6 +28,12 @@ class R2Adapter extends StorageAdapter {
       ? storage.r2.endpoint
       : `https://${storage.r2.endpoint}`;
 
+    console.log('[R2Adapter] Initializing with:', {
+      endpoint,
+      bucket: storage.r2.bucket,
+      accessKey: storage.r2.accessKey ? storage.r2.accessKey.substring(0, 10) + '...' : 'MISSING',
+    });
+
     this.s3Client = new S3Client({
       region: 'auto',
       endpoint,
@@ -56,13 +62,19 @@ class R2Adapter extends StorageAdapter {
 
   async uploadBuffer(buffer, destinationPath, options = {}) {
     try {
+      console.log('[R2Adapter] Uploading buffer:', {
+        bucket: this.bucket,
+        key: destinationPath,
+        size: buffer.length,
+        contentType: options.contentType,
+      });
+
       const command = new PutObjectCommand({
         Bucket: this.bucket,
         Key: destinationPath,
         Body: buffer,
         ContentType: options.contentType || 'application/octet-stream',
         Metadata: this.sanitizeMetadata(options.metadata),
-        ACL: 'public-read',
       });
 
       const result = await this.s3Client.send(command);
@@ -75,6 +87,7 @@ class R2Adapter extends StorageAdapter {
         location: publicUrl,
       };
     } catch (error) {
+      console.error('[R2Adapter] Upload error:', error);
       throw new Error(`R2 upload failed: ${error.message}`);
     }
   }
