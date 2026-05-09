@@ -131,7 +131,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:?REDIS_PASSWORD is required} ping | grep PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
