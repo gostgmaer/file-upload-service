@@ -1,7 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { version } = require('../../package.json');
-const { AdapterFactory } = require('../adapters/AdapterFactory');
+const AdapterFactory = require('../adapters/AdapterFactory');
+const { storage, scaling } = require('../config');
 
 const router = express.Router();
 
@@ -52,9 +53,9 @@ router.get('/ready', async (req, res) => {
 
   // 2. Redis check (if configured)
   try {
-    if (process.env.REDIS_URL) {
+    if (scaling.redisUrl) {
       const Redis = require('ioredis');
-      const redis = new Redis(process.env.REDIS_URL, {
+      const redis = new Redis(scaling.redisUrl, {
         maxRetriesPerRequest: 1,
         connectTimeout: 2000,
       });
@@ -70,17 +71,80 @@ router.get('/ready', async (req, res) => {
     // Redis is optional for rate limiting, so don't fail health check
   }
 
-  // 3. Storage adapter check
+  // 3. Storage adapter check — verify actual connection
   try {
     const adapter = AdapterFactory.createAdapter();
-    // Try to check if adapter is initialized (basic sanity check)
-    if (adapter && typeof adapter.uploadFile === 'function') {
+    
+    // Test the actual connection based on storage type
+    const storageType = storage.type;
+    
+    if (storageType.toLowerCase() === 'azure') {
+      // For Azure: try to get container properties
+      const { BlobServiceClient } = require('@azure/storage-blob');
+      const blobServiceClient = BlobServiceClient.fromConnectionString(storage.azure.connectionString);
+      const containerClient = blobServiceClient.getContainerClient(storage.azure.container);
+      // This will throw if connection/auth fails
+      await containerClient.getProperties();
+      checks.storage = 'ok';
+    } else if (storageType.toLowerCase() === 's3' || storageType.toLowerCase() === 'r2') {
+      // For S3/R2: try to list buckets or get bucket location
+      const { S3Client, HeadBucketCommand } = require('@aws-sdk/client-s3');
+      
+      let s3Config = {
+        region: storage.s3.region,
+      };
+      
+      if (storageType.toLowerCase() === 'r2') {
+        // R2 specific configuration (must match R2Adapter)
+        const endpoint = storage.r2.endpoint.startsWith('http')
+          ? storage.r2.endpoint
+          : `https://${storage.r2.endpoint}`;
+        
+        s3Config = {
+          region: 'auto',
+          endpoint,
+          credentials: {
+            accessKeyId: storage.r2.accessKey,
+            secretAccessKey: storage.r2.secretKey,
+          },
+          forcePathStyle: true,
+        };
+      } else {
+        // S3 configuration
+        s3Config.credentials = {
+          accessKeyId: storage.s3.accessKey,
+          secretAccessKey: storage.s3.secretKey,
+        };
+      }
+      
+      const s3Client = new S3Client(s3Config);
+      const bucket = storageType.toLowerCase() === 'r2' 
+        ? storage.r2.bucket 
+        : storage.s3.bucket;
+      
+      await s3Client.send(new HeadBucketCommand({ Bucket: bucket }));
+      checks.storage = 'ok';
+    } else if (storageType.toLowerCase() === 'gcs') {
+      // For GCS: try to get bucket metadata
+      const { Storage } = require('@google-cloud/storage');
+      const gcsStorage = new Storage({
+        projectId: storage.gcs.projectId,
+        keyFilename: storage.gcs.keyFile,
+      });
+      const bucket = gcsStorage.bucket(storage.gcs.bucket);
+      await bucket.getMetadata();
+      checks.storage = 'ok';
+    } else if (storageType.toLowerCase() === 'local') {
+      // For local: just check if directory is accessible
+      const fs = require('fs');
+      fs.accessSync(storage.localPath, fs.constants.W_OK);
       checks.storage = 'ok';
     } else {
-      checks.storage = 'invalid_adapter';
+      checks.storage = `unsupported_type: ${storageType}`;
       allHealthy = false;
     }
   } catch (error) {
+    console.error('[healthRoutes] Storage check error:', error);
     checks.storage = `error: ${error.message}`;
     allHealthy = false;
   }

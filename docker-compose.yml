@@ -22,7 +22,7 @@ services:
     container_name: file-upload-service
     restart: always                        # always restart on failure (not unless-stopped)
     ports:
-      - "${HOST_PORT:-4001}:4001"          # override HOST_PORT to put a reverse-proxy in front
+      - "${HOST_PORT:-5000}:4001"          # override HOST_PORT to put a reverse-proxy in front
     env_file: .env                         # base config (secrets, storage creds, etc.)
     environment:
       NODE_ENV: production
