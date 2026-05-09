@@ -22,7 +22,7 @@ services:
     container_name: file-upload-service
     restart: always                        # always restart on failure (not unless-stopped)
     ports:
-      - "${HOST_PORT:-4001}:4001"          # override HOST_PORT to put a reverse-proxy in front
+      - "${HOST_PORT:-5000}:4001"          # override HOST_PORT to put a reverse-proxy in front
     env_file: .env                         # base config (secrets, storage creds, etc.)
     environment:
       NODE_ENV: production
@@ -32,8 +32,8 @@ services:
       GENERAL_RATE_LIMIT: ${GENERAL_RATE_LIMIT:-300}
       GENERAL_RATE_WINDOW: ${GENERAL_RATE_WINDOW:-60000}
       ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-true}
-      # Redis — shared rate-limit counters across all cluster workers / replicas
-      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      # Redis — shared rate-limit counters across all cluster workers / replicas (optional)
+      REDIS_URL: ${REDIS_URL:-}
     volumes:
       # Named volume for local storage fallback — irrelevant when using S3/Azure/GCS/R2
       - uploads_data:/app/uploads
@@ -125,13 +125,13 @@ services:
       - --loglevel warning
       - --maxmemory 128mb
       - --maxmemory-policy allkeys-lru   # evict least-recently-used keys under memory pressure
-      - --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
     networks:
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:?REDIS_PASSWORD is required} ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-} ping | grep PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
