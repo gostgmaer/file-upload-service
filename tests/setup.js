@@ -7,6 +7,8 @@ process.env.MONGO_URI = 'mongodb://localhost:27017/file_service_test';
 process.env.STORAGE_TYPE = 'local';
 process.env.CORS_ORIGIN = '*';
 process.env.DEFAULT_TENANT_ID = 'test-tenant';
+process.env.GATEWAY_AUTH_REQUIRED = 'false';
+process.env.GATEWAY_INTERNAL_SECRET = '';
 
 // Raise rate-limit caps so tests never get 429'd
 process.env.UPLOAD_RATE_LIMIT  = '10000';

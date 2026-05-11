@@ -149,7 +149,7 @@ REDIS_URL=redis://:password@localhost:6379
 
 ### Authentication
 
-All requests (except health checks) must include headers from API Gateway:
+All non-health requests must include signed identity headers from API Gateway when `GATEWAY_AUTH_REQUIRED=true`:
 
 ```
 X-User-Id: user-identifier
@@ -165,8 +165,8 @@ X-Gateway-HMAC: signature
 
 | Role | Permissions |
 |------|-------------|
-| `anonymous` | Upload, view, download, list files |
-| `user` | All anonymous + update/rename/replace files |
+| `anonymous` | No file API access |
+| `user` | Upload, view, download, list, update, rename, replace files |
 | `admin` | All user + delete files, bulk operations |
 
 ### Endpoints
@@ -175,7 +175,7 @@ X-Gateway-HMAC: signature
 ```http
 POST /api/files/upload
 Content-Type: multipart/form-data
-X-User-Role: anonymous
+X-User-Role: user
 
 files: <file1>, <file2>, ...
 description: Optional description
@@ -185,19 +185,19 @@ tags: tag1,tag2,tag3
 #### List Files
 ```http
 GET /api/files?page=1&limit=20&search=query&status=active
-X-User-Role: anonymous
+X-User-Role: user
 ```
 
 #### Get File Metadata
 ```http
 GET /api/files/:id
-X-User-Role: anonymous
+X-User-Role: user
 ```
 
 #### Download File
 ```http
 GET /api/files/:id/download
-X-User-Role: anonymous
+X-User-Role: user
 ```
 
 #### Update File Metadata
