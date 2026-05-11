@@ -3,24 +3,36 @@ const AppError = require('../utils/appError');
 const { isValidRole, ROLES } = require('../config/permissions');
 
 /**
- * HMAC Verification Middleware (OPTIONAL)
- * Only verifies signature if gateway secret is configured AND HMAC header is provided
- * Allows standalone usage without API gateway for public endpoints
+ * HMAC Verification Middleware
+ * Strict mode (default): rejects requests without valid gateway HMAC
+ * Relaxed mode: only verifies when HMAC is present
  */
 function verifyGatewaySignature(req, res, next) {
+  const gatewayAuthRequired = process.env.GATEWAY_AUTH_REQUIRED !== 'false';
   const gatewaySecret = process.env.GATEWAY_INTERNAL_SECRET;
   const providedHmac = req.headers['x-gateway-hmac'];
   
-  // If no gateway secret configured OR no HMAC provided, skip verification
-  // This allows standalone usage without API gateway
-  if (!gatewaySecret || !providedHmac) {
+  // Relaxed mode keeps backward compatibility for standalone usage.
+  if (!gatewayAuthRequired && (!gatewaySecret || !providedHmac)) {
     return next();
+  }
+
+  if (!gatewaySecret) {
+    return next(AppError.internal('Gateway auth is enabled but GATEWAY_INTERNAL_SECRET is not configured'));
+  }
+
+  if (!providedHmac) {
+    return next(AppError.unauthorized('Missing gateway signature'));
   }
   
   // If HMAC is provided, verify it
   const userId = req.headers['x-user-id'] || '';
   const userEmail = req.headers['x-user-email'] || '';
   const userRole = req.headers['x-user-role'] || '';
+
+  if (gatewayAuthRequired && (!userId || !userRole)) {
+    return next(AppError.unauthorized('Missing gateway identity headers'));
+  }
   
   // Calculate expected HMAC (same algorithm as gateway)
   const hmacPayload = `${userId}:${userEmail}:${userRole}`;
@@ -28,6 +40,11 @@ function verifyGatewaySignature(req, res, next) {
     .createHmac('sha256', gatewaySecret)
     .update(hmacPayload)
     .digest('hex');
+
+  // timingSafeEqual throws if lengths differ.
+  if (providedHmac.length !== expectedHmac.length) {
+    return next(AppError.forbidden('Invalid gateway signature'));
+  }
   
   // Constant-time comparison to prevent timing attacks
   if (!crypto.timingSafeEqual(Buffer.from(providedHmac), Buffer.from(expectedHmac))) {
