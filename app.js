@@ -76,8 +76,7 @@ app.use((req, res, next) => {
 });
 
 // ─── Gateway signature verification (HMAC) ────────────────────────────────────
-// OPTIONAL: Verifies X-User-* headers if gateway secret is configured
-// Works standalone without API Gateway - HMAC is optional
+// Enforced by default (GATEWAY_AUTH_REQUIRED=true)
 // Skip for health checks
 app.use((req, res, next) => {
   if (req.path.startsWith('/health')) {

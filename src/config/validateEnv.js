@@ -4,6 +4,12 @@ const envSchema = Joi.object({
   PORT: Joi.number().default(4001),
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   MONGO_URI: Joi.string().required(),
+  GATEWAY_AUTH_REQUIRED: Joi.boolean().default(true),
+  GATEWAY_INTERNAL_SECRET: Joi.string().when('GATEWAY_AUTH_REQUIRED', {
+    is: true,
+    then: Joi.string().min(32).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
   TENANCY_MODE: Joi.string().valid('shared', 'per-db').default('shared'),
   DEFAULT_TENANT_ID: Joi.string().default('default'),
   STORAGE_TYPE: Joi.string().valid('local', 's3', 'gcs', 'azure', 'r2').default('local'),
