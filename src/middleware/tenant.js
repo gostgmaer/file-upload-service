@@ -30,8 +30,22 @@ const tenantMiddleware = (req, res, next) => {
 	// Set user info (validated and signed by API gateway)
 	req.userId = rawUserId ? rawUserId.trim() : "anonymous";
 	req.userEmail = rawUserEmail ? rawUserEmail.trim() : null;
-	req.userRole = rawUserRole ? rawUserRole.toLowerCase().trim() : "anonymous";
 	req.userName = rawUserName ? rawUserName.trim() : null;
+
+	// Normalize IAM roles to file-service roles (anonymous | user | admin).
+	// super_admin and service_account from IAM are full admins here.
+	// member/customer are authenticated users.
+	const iamRole = rawUserRole ? rawUserRole.toLowerCase().trim() : "anonymous";
+	const IAM_ADMIN_ROLES = ["super_admin", "admin", "service_account"];
+	const IAM_USER_ROLES  = ["member", "customer", "viewer"];
+	if (IAM_ADMIN_ROLES.includes(iamRole)) {
+		req.userRole = "admin";
+	} else if (IAM_USER_ROLES.includes(iamRole)) {
+		req.userRole = "user";
+	} else {
+		// "user", "admin", "anonymous" pass through as-is (standalone / direct usage)
+		req.userRole = iamRole;
+	}
 	
 	// Validate user ID format if not anonymous
 	if (req.userId !== "anonymous" && !USER_ID_REGEX.test(req.userId)) {
