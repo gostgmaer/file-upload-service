@@ -9,7 +9,8 @@ const { isValidRole, ROLES } = require('../config/permissions');
  */
 function verifyGatewaySignature(req, res, next) {
   const gatewayAuthRequired = process.env.GATEWAY_AUTH_REQUIRED !== 'false';
-  const gatewaySecret = process.env.GATEWAY_INTERNAL_SECRET;
+  // Support either env var name: GATEWAY_INTERNAL_SECRET (original) or FILE_UPLOAD_HMAC_SECRET (gateway-side name)
+  const gatewaySecret = process.env.GATEWAY_INTERNAL_SECRET || process.env.FILE_UPLOAD_HMAC_SECRET;
   const providedHmac = req.headers['x-gateway-hmac'];
   
   // Relaxed mode keeps backward compatibility for standalone usage.
