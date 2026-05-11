@@ -35,7 +35,7 @@ const {
   validateCompleteMultipart,
 } = require('../controllers/validation');
 const { uploadRateLimiter } = require('../middleware/rateLimit');
-const { allowPublic, requireAuth, requireAdmin } = require('../middleware/rbac');
+const { requireAuth, requireAdmin } = require('../middleware/rbac');
 const { storage } = require('../config');
 
 const router = express.Router();
@@ -54,47 +54,44 @@ const upload = multer({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC ENDPOINTS (No authentication required - works standalone)
-// Anyone can upload, view, download files without authentication
+// AUTHENTICATED ENDPOINTS (Requires user or admin role)
+// File data is never exposed to anonymous callers
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Upload files - PUBLIC
+// Upload files - Authenticated users
 router.post(
   '/upload',
   uploadRateLimiter,
   upload.array('files', 10),
   validateFile,
   validateUpload,
-  allowPublic,
+  requireAuth,
   uploadFiles
 );
 
-// List files - PUBLIC
+// List files - Authenticated users
 router.get(
   '/',
   validateQuery,
-  allowPublic,
+  requireAuth,
   getFiles
 );
 
-// Get file metadata - PUBLIC
+// Get file metadata - Authenticated users
 router.get(
   '/:id',
-  allowPublic,
+  requireAuth,
   getFileById
 );
 
-// Download file - PUBLIC
+// Download file - Authenticated users
 router.get(
   '/:id/download',
-  allowPublic,
+  requireAuth,
   downloadFile
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AUTHENTICATED ENDPOINTS (Requires user or admin role)
-// Pass X-User-Role: user or admin (with gateway or directly)
-// ═══════════════════════════════════════════════════════════════════════════
+// Metadata/content mutation endpoints for authenticated users
 
 // Update file metadata - Authenticated users
 router.patch(
@@ -124,7 +121,7 @@ router.put(
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN ENDPOINTS (Requires admin role)
-// Pass X-User-Role: admin (with gateway or directly)
+// Requests must include gateway-signed user headers
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Soft delete - ADMIN ONLY
