@@ -124,7 +124,7 @@ services:
       - --save 60 1000          # persist to disk every 60s if 1000+ keys changed
       - --loglevel warning
       - --maxmemory 128mb
-      - --maxmemory-policy allkeys-lru   # evict least-recently-used keys under memory pressure
+      - --maxmemory-policy noeviction   # evict least-recently-used keys under memory pressure
       - --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
