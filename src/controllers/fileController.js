@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { sendSuccess, HTTP_STATUS } = require('../utils/responseHelper');
 const AppError = require('../utils/appError');
 const { catchAsync } = require('../middleware/errorHandler');
+const { ROLES } = require('../config/permissions');
 
 const fileService = new FileService();
 
@@ -129,7 +130,11 @@ const getFiles = catchAsync(async (req, res) => {
 
 const getFileById = catchAsync(async (req, res) => {
   const tenantId = req.tenantId;
-  const file = await fileService.getFileById(req.params.id, tenantId);
+  const isAdmin = req.userRole === ROLES.ADMIN;
+  const file = await fileService.getFileById(req.params.id, tenantId, req.userId, {
+    isAdmin,
+    allowPublic: true,
+  });
 
   if (!file) throw AppError.notFound('File not found');
 
@@ -141,13 +146,21 @@ const downloadFile = catchAsync(async (req, res) => {
   const tenantId = req.tenantId;
   const inline = req.query.inline === '1';
   const useSignedUrl = req.query.signed === '1';
+  const isAdmin = req.userRole === ROLES.ADMIN;
+  const accessOptions = { isAdmin, allowPublic: true };
 
   if (useSignedUrl) {
-    const { signedUrl } = await fileService.getSignedDownloadUrl(id, tenantId);
+    const { signedUrl } = await fileService.getSignedDownloadUrl(
+      id,
+      tenantId,
+      req.userId,
+      {},
+      accessOptions
+    );
     return res.redirect(signedUrl);
   }
 
-  const { file, stream } = await fileService.getDownloadStream(id, tenantId);
+  const { file, stream } = await fileService.getDownloadStream(id, tenantId, req.userId, accessOptions);
 
   // Sanitize filename: strip control chars and quotes to prevent header injection
   const safeFilename = file.originalName.replace(/[\x00-\x1f\x7f"\\]/g, '_');

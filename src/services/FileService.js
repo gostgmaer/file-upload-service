@@ -114,10 +114,20 @@ class FileService {
     }
   }
 
-  async getFileById(fileId, tenantId, userId = null) {
+  async getFileById(fileId, tenantId, userId = null, accessOptions = {}) {
     try {
+      const { isAdmin = false, allowPublic = false } = accessOptions;
       const query = { _id: fileId, tenantId, status: 'active' };
-      if (userId) query.uploader = userId;
+
+      if (userId && !isAdmin) {
+        // Mutation call sites (rename/update/replace) pass userId with no
+        // accessOptions, which keeps the original strict owner-only match -
+        // they must never widen to admin/public bypass. Read call sites
+        // (getFileById/download) opt into the wider match explicitly.
+        query.$or = allowPublic
+          ? [{ uploader: userId }, { 'metadata.isPublic': true }]
+          : [{ uploader: userId }];
+      }
 
       const file = await File.findOne(query);
       if (!file) throw AppError.notFound('File not found');
@@ -179,9 +189,9 @@ class FileService {
     }
   }
 
-  async getDownloadStream(fileId, tenantId, userId = null) {
+  async getDownloadStream(fileId, tenantId, userId = null, accessOptions = {}) {
     try {
-      const file = await this.getFileById(fileId, tenantId, userId);
+      const file = await this.getFileById(fileId, tenantId, userId, accessOptions);
       const stream = await this.storageAdapter.getDownloadStream(file.storageKey);
       return { file, stream };
     } catch (error) {
@@ -189,9 +199,9 @@ class FileService {
     }
   }
 
-  async getSignedDownloadUrl(fileId, tenantId, userId = null, options = {}) {
+  async getSignedDownloadUrl(fileId, tenantId, userId = null, options = {}, accessOptions = {}) {
     try {
-      const file = await this.getFileById(fileId, tenantId, userId);
+      const file = await this.getFileById(fileId, tenantId, userId, accessOptions);
       const signedUrl = await this.storageAdapter.getSignedUrl(file.storageKey, options);
       return { file, signedUrl };
     } catch (error) {
@@ -358,8 +368,9 @@ class FileService {
     );
 
     try {
-      // Verify file exists and is accessible
-      await this.getFileById(fileId, tenantId);
+      // Verify file exists and caller owns it - matches updateFileMetadata
+      // and replaceFileContent, which already scope by userId.
+      await this.getFileById(fileId, tenantId, userId);
 
       const trimmedName = newName.trim();
       if (!trimmedName) throw new Error('Name cannot be empty');
