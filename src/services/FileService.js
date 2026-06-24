@@ -4,6 +4,8 @@ const File = require('../models/File');
 const FileTransaction = require('../models/FileTransaction');
 const AdapterFactory = require('../adapters/AdapterFactory');
 const AppError = require('../utils/appError');
+const { scanning } = require('../config');
+const { scanBuffer } = require('../utils/clamavScanner');
 
 class FileService {
   constructor() {
@@ -57,6 +59,40 @@ class FileService {
     }
   }
 
+  /**
+   * Fire-and-forget post-upload malware scan (intentionally not awaited by
+   * callers - "even an async post-upload scan" is the accepted mitigation
+   * for this finding, so it never adds latency or failure-coupling to the
+   * upload request itself). Never marks a file CLEAN without a real scan
+   * result - SKIPPED/ERROR are distinct, honest outcomes.
+   */
+  scanFileAsync(file, buffer) {
+    if (!scanning.enabled) {
+      console.warn(
+        `[VirusScan] CLAMAV_HOST not configured - file ${file._id} stored with scanStatus=SKIPPED (not scanned).`
+      );
+      File.findByIdAndUpdate(file._id, { scanStatus: 'SKIPPED' }).catch(() => {});
+      return;
+    }
+
+    scanBuffer(buffer, { host: scanning.clamavHost, port: scanning.clamavPort })
+      .then(async (result) => {
+        if (result.clean) {
+          await File.findByIdAndUpdate(file._id, { scanStatus: 'CLEAN' });
+          return;
+        }
+        console.warn(
+          `[VirusScan] File ${file._id} flagged INFECTED (${result.signature}) - removing from storage.`
+        );
+        await File.findByIdAndUpdate(file._id, { scanStatus: 'INFECTED', status: 'deleted' });
+        await this.storageAdapter.delete(file.storageKey).catch(() => {});
+      })
+      .catch(async (err) => {
+        console.error(`[VirusScan] Scan failed for file ${file._id}: ${err.message}`);
+        await File.findByIdAndUpdate(file._id, { scanStatus: 'ERROR' }).catch(() => {});
+      });
+  }
+
   async uploadFile(fileData, uploaderId, tenantId, requestId, metadata = {}) {
     const transaction = await this.logTransaction(
       tenantId,
@@ -102,6 +138,7 @@ class FileService {
       });
 
       await file.save();
+      this.scanFileAsync(file, fileData.buffer);
 
       await this.updateTransaction(transaction._id, 'success', uploadResult);
       transaction.fileId = file._id;
@@ -302,11 +339,14 @@ class FileService {
             mimeType: newFileData.mimetype,
             extension: newExtension,
             publicUrl: uploadResult.location,
+            // Content changed - the previous scan result no longer applies.
+            scanStatus: 'PENDING',
           },
           $push: { versions: currentVersion },
         },
         { new: true, runValidators: true }
       );
+      this.scanFileAsync(updatedFile, newFileData.buffer);
 
       await this.updateTransaction(transaction._id, 'success', uploadResult);
 
@@ -355,6 +395,54 @@ class FileService {
       await this.updateTransaction(transaction._id, 'failed', null, error.message);
       throw error;
     }
+  }
+
+  /**
+   * Permanently deletes files whose metadata.expiresAt has passed - the field
+   * has existed on the schema since the start but nothing ever enforced it,
+   * so storage grew unbounded for any caller that set it. Intended to be
+   * called periodically by a background job (see jobs/expiredFilesCleanup.js),
+   * not from a request path - spans all tenants by design (each file still
+   * carries its own tenantId for the transaction log).
+   */
+  async cleanupExpiredFiles(batchSize = 200) {
+    const expired = await File.find({
+      status: { $ne: 'deleted' },
+      'metadata.expiresAt': { $lte: new Date() },
+    }).limit(batchSize);
+
+    let deleted = 0;
+    let failed = 0;
+
+    for (const file of expired) {
+      const transaction = await this.logTransaction(
+        file.tenantId,
+        file._id,
+        'permanent_delete',
+        'system:ttl-cleanup',
+        `ttl-cleanup-${file._id}`,
+        { reason: 'metadata.expiresAt elapsed', expiresAt: file.metadata.expiresAt }
+      );
+
+      try {
+        await this.storageAdapter.delete(file.storageKey);
+        for (const version of file.versions) {
+          try {
+            await this.storageAdapter.delete(version.storageKey);
+          } catch (err) {
+            // Version cleanup is best-effort, same as deleteFile()
+          }
+        }
+        await File.findByIdAndDelete(file._id);
+        await this.updateTransaction(transaction._id, 'success');
+        deleted++;
+      } catch (error) {
+        await this.updateTransaction(transaction._id, 'failed', null, error.message);
+        failed++;
+      }
+    }
+
+    return { scanned: expired.length, deleted, failed };
   }
 
   async renameFile(fileId, userId, tenantId, newName, requestId) {

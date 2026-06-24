@@ -36,6 +36,16 @@ const db = {
   tenancyMode: process.env.TENANCY_MODE || 'shared', // 'shared' | 'per-db'
 };
 
+// ─── malware scanning ───────────────────────────────────────────────────────
+// Optional - if CLAMAV_HOST is unset, uploads are stored with scanStatus
+// 'SKIPPED' (logged loudly, never silently reported as clean). Async,
+// post-upload, per the audit's own accepted mitigation for this finding.
+const scanning = {
+  enabled: !!process.env.CLAMAV_HOST,
+  clamavHost: process.env.CLAMAV_HOST || '',
+  clamavPort: _int(process.env.CLAMAV_PORT, 3310),
+};
+
 // ─── storage ────────────────────────────────────────────────────────────────
 const storage = {
   type: process.env.STORAGE_TYPE || 'local',
@@ -48,6 +58,10 @@ const storage = {
   uploadRateLimit: _int(process.env.UPLOAD_RATE_LIMIT, 10),
   uploadRateWindow: _int(process.env.UPLOAD_RATE_WINDOW, 900000), // 15 min
   signedUrlExpiry: _int(process.env.SIGNED_URL_EXPIRY, 3600), // 1 hr
+  // HMAC secret for LocalAdapter's signed download URLs - required whenever
+  // STORAGE_TYPE=local (validated in validateEnv.js). Cloud adapters (S3/GCS/
+  // Azure/R2) sign with their own provider credentials instead.
+  localSignedUrlSecret: process.env.LOCAL_SIGNED_URL_SECRET || '',
 
   // AWS S3
   s3: {
@@ -56,6 +70,13 @@ const storage = {
     accessKey: process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || '',
     secretKey: process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || '',
     endpoint: process.env.S3_ENDPOINT || '',
+    // Server-side encryption explicitly requested per-object rather than
+    // relying solely on the bucket's own default-encryption policy (which
+    // may not be set, especially on older buckets predating AWS's 2023
+    // SSE-S3-by-default change). 'AES256' needs no extra IAM permissions;
+    // set to 'aws:kms' + S3_SSE_KMS_KEY_ID for a customer-managed key.
+    sseAlgorithm: process.env.S3_SSE_ALGORITHM || 'AES256',
+    sseKmsKeyId: process.env.S3_SSE_KMS_KEY_ID || '',
   },
 
   // Google Cloud Storage
@@ -84,4 +105,4 @@ const storage = {
   },
 };
 
-module.exports = { server, db, storage, scaling };
+module.exports = { server, db, storage, scaling, scanning };

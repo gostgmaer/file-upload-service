@@ -11,6 +11,7 @@ const { notFound, globalErrorHandler } = require('./src/middleware/errorHandler'
 const { generalRateLimiter } = require('./src/middleware/rateLimit');
 const fileRoutes = require('./src/routes/fileRoutes');
 const healthRoutes = require('./src/routes/healthRoutes');
+const { register: metricsRegister, httpMetricsMiddleware } = require('./src/utils/metrics');
 
 const app = express();
 app.set('trust proxy', 1); // Trust the first proxy (e.g. AWS ALB, Heroku, etc.)
@@ -22,6 +23,8 @@ app.use(helmet());
 if (scaling.enableCompression) {
   app.use(compression());
 }
+
+app.use(httpMetricsMiddleware);
 
 // CORS — support a comma-separated list of allowed origins
 const allowedOrigins = serverConfig.corsOrigin
@@ -77,9 +80,17 @@ app.use((req, res, next) => {
 
 // ─── Gateway signature verification (HMAC) ────────────────────────────────────
 // Enforced by default (GATEWAY_AUTH_REQUIRED=true)
-// Skip for health checks
+// Skip for health checks and the signed local-download URL - the latter
+// carries its own HMAC + expiry in the query string (see LocalAdapter.
+// getSignedUrl / localSignedUrl.js), the same role a cloud-adapter presigned
+// URL plays by pointing at a different host entirely; gateway auth would
+// defeat the purpose of a short-lived, delegable download link.
 app.use((req, res, next) => {
-  if (req.path.startsWith('/health')) {
+  if (
+    req.path.startsWith('/health') ||
+    req.path === '/api/files/local-download' ||
+    req.path === '/metrics'
+  ) {
     return next();
   }
   verifyGatewaySignature(req, res, next);
@@ -118,6 +129,12 @@ app.get('/', (req, res) => {
 
 // Health check — no tenant required, no rate limit
 app.use('/health', healthRoutes);
+
+// Prometheus scrape target — no tenant/gateway auth, no rate limit
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', metricsRegister.contentType);
+  res.end(await metricsRegister.metrics());
+});
 
 // Global API rate limiter — all /api routes (configurable: GENERAL_RATE_LIMIT / GENERAL_RATE_WINDOW)
 app.use('/api', generalRateLimiter);

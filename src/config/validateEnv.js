@@ -14,12 +14,22 @@ const envSchema = Joi.object({
   DEFAULT_TENANT_ID: Joi.string().default('default'),
   STORAGE_TYPE: Joi.string().valid('local', 's3', 'gcs', 'azure', 'r2').default('local'),
   LOCAL_UPLOAD_DIR: Joi.string().default('uploads'),
+  // Required whenever local storage is active - signs LocalAdapter's download
+  // URLs (HMAC + expiry) so they're a real bearer token, not a guessable raw
+  // path. Same required-when-active pattern as the cloud adapters' credentials.
+  LOCAL_SIGNED_URL_SECRET: Joi.string().when('STORAGE_TYPE', {
+    is: 'local',
+    then: Joi.string().min(32).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
 
   // S3
   S3_BUCKET: Joi.string().when('STORAGE_TYPE', { is: 's3', then: Joi.string().required(), otherwise: Joi.string().allow('').optional() }),
   S3_REGION: Joi.string().allow('').optional(),
   S3_ACCESS_KEY: Joi.string().when('STORAGE_TYPE', { is: 's3', then: Joi.string().required(), otherwise: Joi.string().allow('').optional() }),
   S3_SECRET_KEY: Joi.string().when('STORAGE_TYPE', { is: 's3', then: Joi.string().required(), otherwise: Joi.string().allow('').optional() }),
+  S3_SSE_ALGORITHM: Joi.string().valid('AES256', 'aws:kms').default('AES256'),
+  S3_SSE_KMS_KEY_ID: Joi.string().allow('').optional(),
 
   // GCS
   GCS_BUCKET: Joi.string().when('STORAGE_TYPE', { is: 'gcs', then: Joi.string().required(), otherwise: Joi.string().allow('').optional() }),
@@ -42,6 +52,12 @@ const envSchema = Joi.object({
   UPLOAD_RATE_LIMIT: Joi.number().default(10),
   UPLOAD_RATE_WINDOW: Joi.number().default(900000),
   SIGNED_URL_EXPIRY: Joi.number().default(3600),
+
+  // Malware scanning - optional. Absence is an accepted, logged state
+  // (scanStatus=SKIPPED), not a fail-closed requirement like the storage
+  // adapter credentials above.
+  CLAMAV_HOST: Joi.string().allow('').optional(),
+  CLAMAV_PORT: Joi.number().default(3310),
 
   // CORS — comma-separated list of allowed origins
   CORS_ORIGIN: Joi.string().default('http://localhost:3000'),

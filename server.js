@@ -5,6 +5,7 @@ const { validateEnv } = require('./src/config/validateEnv');
 const { connectDB, disconnectDB } = require('./src/config/db');
 const { server: serverConfig, scaling } = require('./src/config');
 const app = require('./app');
+const { startExpiredFilesCleanupJob } = require('./src/jobs/expiredFilesCleanup');
 
 // Validate environment variables at startup — exits with clear error if misconfigured
 validateEnv();
@@ -34,6 +35,7 @@ if (cluster.isPrimary && workerCount > 1) {
 
 // ─── Worker / single-process logic ────────────────────────────────────────────
 let httpServer;
+let stopExpiredFilesCleanup;
 
 const start = async () => {
   try {
@@ -42,6 +44,14 @@ const start = async () => {
       const workerLabel = workerCount > 1 ? ` [worker ${process.pid}]` : '';
       console.log(`File upload service running on port ${serverConfig.port} [${serverConfig.env}]${workerLabel}`);
     });
+
+    // Run the cleanup job exactly once across the cluster (not once per
+    // worker) - in single-process mode this process is the only one anyway;
+    // in clustered mode only the first-forked worker runs it.
+    const isSoleRunner = !cluster.isWorker || cluster.worker.id === 1;
+    if (isSoleRunner) {
+      stopExpiredFilesCleanup = startExpiredFilesCleanupJob();
+    }
 
     // Per-request timeout — prevents slow clients from holding connections indefinitely
     if (scaling.requestTimeoutMs > 0) {
@@ -57,6 +67,9 @@ const start = async () => {
 
 const shutdown = async (signal) => {
   console.log(`${signal} received — shutting down gracefully`);
+  if (stopExpiredFilesCleanup) {
+    stopExpiredFilesCleanup();
+  }
   if (httpServer) {
     // Stop accepting new connections; wait for in-flight requests to finish
     httpServer.close(async () => {

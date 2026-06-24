@@ -3,6 +3,7 @@ const path = require('path');
 const { Readable } = require('stream');
 const StorageAdapter = require('./StorageAdapter');
 const { storage } = require('../config');
+const { sign } = require('../utils/localSignedUrl');
 
 class LocalAdapter extends StorageAdapter {
   constructor() {
@@ -52,8 +53,21 @@ class LocalAdapter extends StorageAdapter {
   }
 
   async getSignedUrl(destinationPath, options = {}) {
-    // Local storage doesn't have real signed URLs — return a direct path
-    return `/${destinationPath}`;
+    // Real HMAC-signed, time-limited token - verified by the dedicated
+    // /api/files/local-download route (exempted from gateway/tenant auth the
+    // same way a cloud-adapter presigned URL bypasses this app entirely; the
+    // signature itself is the access grant, matching the S3/GCS/Azure/R2
+    // adapters' actual expiring-link behavior instead of returning a bare,
+    // permanent, unauthenticated path).
+    const expirySeconds = options.expiry || storage.signedUrlExpiry;
+    const expiresAt = Date.now() + expirySeconds * 1000;
+    const signature = sign(destinationPath, expiresAt);
+    const query = new URLSearchParams({
+      path: destinationPath,
+      expires: String(expiresAt),
+      signature,
+    }).toString();
+    return `/api/files/local-download?${query}`;
   }
 
   async delete(destinationPath) {
