@@ -1,9 +1,12 @@
+const mime = require('mime-types');
 const FileService = require('../services/FileService');
 const { v4: uuidv4 } = require('uuid');
 const { sendSuccess, HTTP_STATUS } = require('../utils/responseHelper');
 const AppError = require('../utils/appError');
 const { catchAsync } = require('../middleware/errorHandler');
 const { ROLES } = require('../config/permissions');
+const LocalAdapter = require('../adapters/LocalAdapter');
+const { verify: verifyLocalSignedUrl } = require('../utils/localSignedUrl');
 
 const fileService = new FileService();
 
@@ -29,6 +32,7 @@ const formatFile = (file) => ({
   uploader: file.uploader,
   category: file.category,
   status: file.status,
+  scanStatus: file.scanStatus,
   // The URL you can use to access / download the file directly (adapter-dependent)
   url: file.publicUrl,
   metadata: {
@@ -411,11 +415,38 @@ const abortMultipartUpload = catchAsync(async (req, res) => {
   return sendSuccess(res, { data: result, message: 'Multipart upload aborted' });
 });
 
+// Serves a LocalAdapter signed download URL (no gateway/tenant auth - the
+// signature + expiry embedded in the query string IS the access grant, the
+// same role a cloud-provider presigned URL plays for the other adapters).
+// Mounted at /api/files/local-download and exempted from the gateway-HMAC
+// middleware in app.js for exactly this reason.
+const serveLocalSignedDownload = catchAsync(async (req, res) => {
+  const { path: destinationPath, expires, signature } = req.query;
+  if (!destinationPath || !expires || !signature) {
+    throw AppError.badRequest('Missing path, expires, or signature query parameter');
+  }
+  if (!verifyLocalSignedUrl(destinationPath, expires, signature)) {
+    throw AppError.forbidden('Invalid or expired signed URL');
+  }
+
+  const stream = await LocalAdapter.getDownloadStream(destinationPath);
+  res.set({
+    'Content-Type': mime.lookup(destinationPath) || 'application/octet-stream',
+  });
+  stream.pipe(res);
+  stream.on('error', () => {
+    if (!res.headersSent) {
+      throw AppError.internal('Download failed');
+    }
+  });
+});
+
 module.exports = {
   uploadFiles,
   getFiles,
   getFileById,
   downloadFile,
+  serveLocalSignedDownload,
   renameFile,
   updateFileMetadata,
   replaceFileContent,

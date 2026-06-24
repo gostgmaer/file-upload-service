@@ -36,6 +36,16 @@ class S3Adapter extends StorageAdapter {
     this.bucket = storage.s3.bucket;
   }
 
+  // Explicit per-object SSE params, applied to every PUT/multipart-initiate
+  // call - never relies solely on the bucket's own default-encryption policy.
+  _encryptionParams() {
+    const params = { ServerSideEncryption: storage.s3.sseAlgorithm };
+    if (storage.s3.sseAlgorithm === 'aws:kms' && storage.s3.sseKmsKeyId) {
+      params.SSEKMSKeyId = storage.s3.sseKmsKeyId;
+    }
+    return params;
+  }
+
   async uploadBuffer(buffer, destinationPath, options = {}) {
     try {
       const command = new PutObjectCommand({
@@ -44,6 +54,7 @@ class S3Adapter extends StorageAdapter {
         Body: buffer,
         ContentType: options.contentType || 'application/octet-stream',
         Metadata: options.metadata || {},
+        ...this._encryptionParams(),
       });
 
       const result = await this.s3Client.send(command);
@@ -67,6 +78,7 @@ class S3Adapter extends StorageAdapter {
         Body: stream,
         ContentType: options.contentType || 'application/octet-stream',
         Metadata: options.metadata || {},
+        ...this._encryptionParams(),
       });
 
       const result = await this.s3Client.send(command);
@@ -198,6 +210,9 @@ class S3Adapter extends StorageAdapter {
         Key: destinationPath,
         ContentType: options.contentType || 'application/octet-stream',
         Metadata: options.metadata || {},
+        // SSE specified at multipart initiation applies to the whole completed
+        // object automatically - no per-part client coordination needed.
+        ...this._encryptionParams(),
       });
       const result = await this.s3Client.send(command);
       return { uploadId: result.UploadId };

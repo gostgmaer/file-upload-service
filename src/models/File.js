@@ -41,6 +41,15 @@ const fileSchema = new mongoose.Schema(
       enum: ['active', 'deleted', 'archived', 'pending'],
       default: 'active',
     },
+    // Real result of an async post-upload malware scan against the actual
+    // bytes (see jobs/virusScan via FileService.scanFileAsync) - SKIPPED
+    // means no scanner was configured for this deployment, never reported
+    // as CLEAN when nothing was actually checked.
+    scanStatus: {
+      type: String,
+      enum: ['PENDING', 'CLEAN', 'INFECTED', 'SKIPPED', 'ERROR'],
+      default: 'PENDING',
+    },
     pendingUpload: {
       uploadId: { type: String },       // S3/R2 multipart upload ID
       expiresAt: { type: Date },        // When the presigned URL / multipart session expires

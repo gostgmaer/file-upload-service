@@ -5,6 +5,7 @@ const {
   getFiles,
   getFileById,
   downloadFile,
+  serveLocalSignedDownload,
   renameFile,
   updateFileMetadata,
   replaceFileContent,
@@ -52,6 +53,15 @@ const upload = multer({
     }
   },
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIGNED URL DOWNLOAD (no gateway/tenant auth - the signature + expiry in the
+// query string is the access grant; see LocalAdapter.getSignedUrl). Exempted
+// from verifyGatewaySignature in app.js for the same reason a cloud-adapter
+// presigned URL never reaches this app's middleware at all.
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/local-download', serveLocalSignedDownload);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTHENTICATED ENDPOINTS (Requires user or admin role)

@@ -1,0 +1,53 @@
+groups:
+  - name: file-upload-service-http
+    rules:
+      - alert: FileUploadServiceHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          * 100
+          > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: file-upload-service
+        annotations:
+          summary: High HTTP 5xx error rate on file-upload-service
+          description: "5xx error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes."
+
+      - alert: FileUploadServiceHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, route) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: file-upload-service
+        annotations:
+          summary: file-upload-service p95 latency is elevated
+          description: "Route {{ $labels.route }} has sustained p95 latency above 2s for 10 minutes (likely large-file upload/download contention)."
+
+  - name: file-upload-service-process
+    rules:
+      - alert: FileUploadServiceHighMemory
+        expr: process_resident_memory_bytes{job="file-upload-service"} > 900000000
+        for: 10m
+        labels:
+          severity: warning
+          service: file-upload-service
+        annotations:
+          summary: file-upload-service memory usage is high
+          description: "Resident memory is {{ $value | humanize1024 }}B, approaching the 1G container limit set in docker-compose.yml."
+
+      - alert: FileUploadServiceDown
+        expr: up{job="file-upload-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: file-upload-service
+        annotations:
+          summary: file-upload-service is not reachable by Prometheus
+          description: "The /metrics scrape target has been down for 1 minute."

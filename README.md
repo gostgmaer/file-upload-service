@@ -1,6 +1,12 @@
 # File Upload Service
 
-A production-ready,microservice for file upload and management with multi-tenant support, RBAC, and multiple cloud storage backends.
+A microservice for file upload and management with multi-tenant support, RBAC, and multiple cloud storage backends.
+
+**Current production-readiness status:** see [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)
+for the actual, up-to-date assessment (score, blocking items, and what's still
+open) before relying on this service in production - several P0 items there
+are not yet complete (credential rotation, a real `GATEWAY_INTERNAL_SECRET`,
+dependency install/test verification).
 
 ## Features
 
@@ -9,7 +15,7 @@ A production-ready,microservice for file upload and management with multi-tenant
 ✅ **RBAC** - Role-based access control integrated with API Gateway  
 ✅ **Security** - HMAC signature verification, magic byte validation, file sanitization  
 ✅ **Scalable** - Cluster mode, Redis-based rate limiting, connection pooling  
-✅ **Production Ready** - Health checks, retry logic, comprehensive error handling  
+✅ **Health checks, retry logic, and structured error handling** - see [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for what's still outstanding before this counts as production-ready  
 ✅ **API Gateway Integration** - JWT validation handled upstream  
 
 ---
@@ -651,4 +657,4 @@ MIT
 
 ---
 
-**Built with ❤️ for production workloads**
+**See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for current production-readiness status before deploying.**
