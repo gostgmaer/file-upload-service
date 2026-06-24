@@ -91,10 +91,10 @@
 
 #### 1. ❌ ROTATE CREDENTIALS (USER ACTION REQUIRED)
 **Current issue:**
-- An `env` file containing real MongoDB and Azure Storage credentials was committed to git history on this repo's `main` and `development` branches. This document itself previously restated those credential values in plaintext, which has been redacted here - **redacting this file does not remove the exposure**, the values are still present in git history until that history is rewritten and force-pushed, and the credentials themselves remain compromised until rotated at the provider regardless of any git cleanup.
-  - MongoDB password: [REDACTED - rotate immediately, see action items below]
-  - Azure storage access key: [REDACTED - rotate immediately, see action items below]
-  - Azure connection string with account key: [REDACTED - rotate immediately]
+- A real MongoDB password and a partial Azure Storage access key were committed in plaintext in this document (this file restated values that were also in a separate, gitignored `env` file). Git history on `main` and `development` has since been rewritten (`git filter-repo`) and force-pushed to scrub those values from every commit - they're no longer retrievable from this repository's history. **That does not mean they're safe to keep using**: the credentials were pushed to a remote and must be treated as compromised regardless of the history cleanup - rotation at the provider is still required and has not been done as part of this fix (no access to the MongoDB/Azure accounts from here).
+  - MongoDB password: rotate in MongoDB Atlas/cluster - not yet done
+  - Azure storage access key: regenerate in Azure Portal - not yet done
+  - Azure connection string with account key: regenerate alongside the access key above
 
 **Actions required:**
 ```bash
