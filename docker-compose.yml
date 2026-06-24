@@ -21,8 +21,9 @@ services:
     image: file-upload-service:${APP_VERSION:-latest}
     container_name: file-upload-service
     restart: always                        # always restart on failure (not unless-stopped)
-    ports:
-      - "${HOST_PORT:-5000}:4001"          # override HOST_PORT to put a reverse-proxy in front
+    # No direct host port - Traefik (joined via the `edge` network, see
+    # labels below) is now the reverse proxy this comment used to anticipate
+    # adding later. Reachable from the host only through Traefik's TLS entrypoint.
     env_file: .env                         # base config (secrets, storage creds, etc.)
     environment:
       NODE_ENV: production
@@ -46,6 +47,19 @@ services:
         condition: service_healthy
     networks:
       - internal
+      - edge
+    labels:
+      # The reverse-proxy this file's own comment anticipated - Traefik (the
+      # separate infra/ repo's stack), reached via the external `edge`
+      # network. Requires that stack running and TRAEFIK_NETWORK_NAME=edge.
+      - traefik.enable=true
+      - traefik.docker.network=edge
+      - traefik.http.routers.file-upload-service.entrypoints=websecure
+      - "traefik.http.routers.file-upload-service.rule=Host(`files.easydev.in`)"
+      - traefik.http.routers.file-upload-service.tls=true
+      - traefik.http.routers.file-upload-service.tls.certresolver=le
+      - traefik.http.routers.file-upload-service.middlewares=security-headers@file
+      - traefik.http.services.file-upload-service.loadbalancer.server.port=4001
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4001/health"]
       interval: 30s
@@ -165,3 +179,6 @@ networks:
     # Isolate: only containers on this network can reach each other.
     # For Swarm overlay, change driver to: overlay
     # internal: true                        # no outbound internet from this network segment
+  # Created by the separate infra/ repo's Traefik+Portainer stack.
+  edge:
+    external: true
