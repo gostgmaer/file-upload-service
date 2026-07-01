@@ -126,6 +126,7 @@ jobs:
     needs: [changes, quality-and-security]
     if: |
       always() &&
+      github.event_name != 'pull_request' &&
       needs.changes.result == 'success' &&
       (needs.quality-and-security.result == 'success' || needs.quality-and-security.result == 'skipped') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.run_mode != 'deploy-only')
