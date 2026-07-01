@@ -1,4 +1,4 @@
-name: File Upload Service Pipeline
+﻿name: File Upload Service Pipeline
 
 # Replaces this repo's previous CD gap: only auto-tag-on-main.yml existed
 # (version-bumps a tag on every push to main with no build, test, or deploy
@@ -131,11 +131,15 @@ jobs:
     needs: [changes, quality-and-security]
     if: |
       always() &&
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
-      (needs.changes.outputs.code_changed == 'true' || needs.changes.outputs.dependencies_changed == 'true') &&
       (needs.quality-and-security.result == 'success' || needs.quality-and-security.result == 'skipped') &&
-      (github.event_name != 'workflow_dispatch' || github.event.inputs.run_mode != 'deploy-only')
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'deploy-only') ||
+        (
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+          (needs.changes.outputs.code_changed == 'true' || needs.changes.outputs.dependencies_changed == 'true')
+        )
+      )
     steps:
       - name: Checkout
         uses: actions/checkout@v6
