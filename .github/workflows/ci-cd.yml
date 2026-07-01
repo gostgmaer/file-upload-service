@@ -131,8 +131,9 @@ jobs:
     needs: [changes, quality-and-security]
     if: |
       always() &&
-      github.event_name != 'pull_request' &&
-      needs.changes.result == 'success' &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      (needs.changes.outputs.code_changed == 'true' || needs.changes.outputs.dependencies_changed == 'true') &&
       (needs.quality-and-security.result == 'success' || needs.quality-and-security.result == 'skipped') &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.run_mode != 'deploy-only')
     steps:
