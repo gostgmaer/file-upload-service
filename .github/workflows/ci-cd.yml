@@ -232,7 +232,7 @@ jobs:
       )
     steps:
       - name: Dispatch deploy-core to easydev-infra
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.PAT }}
           script: |
