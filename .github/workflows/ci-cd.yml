@@ -208,62 +208,23 @@ jobs:
           echo "Published ${ghcr_image}:${version_tag}"
 
   # ---------------------------------------------------------------------------
-  # Stage 4: Trigger infra deploy
-  # Service CI owns build + image push (stages 1-3). All deployment
-  # orchestration (env generation, compose up, health checks) is owned by
-  # easydev-infra - same division of responsibility as the IAM/payment
-  # pipelines, to keep deploy logic and env secrets in one place.
-  # ---------------------------------------------------------------------------
-  trigger-infra-deploy:
-    name: trigger-infra-deploy
-    runs-on: ubuntu-latest
-    needs: [changes, quality-and-security, build-and-push]
-    if: |
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.changes.result == 'success' &&
-      needs.quality-and-security.result != 'failure' &&
-      (github.event_name != 'workflow_dispatch' || github.event.inputs.run_mode != 'build-only') &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'deploy-only') ||
-        needs.build-and-push.result == 'success' ||
-        needs.build-and-push.result == 'skipped'
-      )
-    steps:
-      - name: Dispatch deploy-core to easydev-infra
-        uses: actions/github-script@v9
-        with:
-          github-token: ${{ secrets.PAT }}
-          script: |
-            await github.rest.repos.createDispatchEvent({
-              owner: context.repo.owner,
-              repo: 'easydev-infra',
-              event_type: 'deploy-core',
-              client_payload: {
-                service: 'file-upload-service',
-                triggered_by: context.sha,
-              },
-            })
-            core.info('Dispatched deploy-core to easydev-infra')
-
-  # ---------------------------------------------------------------------------
-  # Stage 5: Create GitHub release and git tag
+  # Stage 4: Create GitHub release and git tag
   # Replaces auto-tag-on-main.yml's standalone tag bump - now only runs after
   # a build+push actually succeeded, so a tag always corresponds to an image
   # that was verified to build (previously a tag could exist with no working
   # image behind it at all).
+  # Infra deploy dispatch removed - deploy orchestration is triggered from
+  # easydev-infra directly, not from this pipeline.
   # ---------------------------------------------------------------------------
   release:
     name: release
     runs-on: ubuntu-latest
-    needs: [build-and-push, trigger-infra-deploy]
+    needs: [build-and-push]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.build-and-push.result == 'success' &&
-      needs.trigger-infra-deploy.result == 'success'
+      needs.build-and-push.result == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
