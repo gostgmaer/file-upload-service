@@ -187,23 +187,25 @@ jobs:
         env:
           GHCR_PACKAGE: ${{ env.GHCR_PACKAGE }}
         run: |
-          $owner_lower = "${{ github.repository_owner }}".ToLower()
-          $package_lower = "${env:GHCR_PACKAGE}".ToLower()
-          $ghcr_image = "ghcr.io/${owner_lower}/${package_lower}"
+          set -euo pipefail
+          owner_lower="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          package_lower="$(echo "${GHCR_PACKAGE}" | tr '[:upper:]' '[:lower:]')"
+          ghcr_image="ghcr.io/${owner_lower}/${package_lower}"
 
-          $branch_name = "${{ github.ref }}".Replace("refs/heads/", "")
-          $branch_slug = $branch_name.Replace("/", "-").ToLower()
-          $version_tag = "${branch_slug}-build-${{ github.run_number }}"
+          branch_name="${{ github.ref }}"
+          branch_name="${branch_name#refs/heads/}"
+          branch_slug="$(echo "${branch_name}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')"
+          version_tag="${branch_slug}-build-${{ github.run_number }}"
 
-          docker tag $env:NEW_IMAGE "${ghcr_image}:${version_tag}"
+          docker tag "${NEW_IMAGE}" "${ghcr_image}:${version_tag}"
           docker push "${ghcr_image}:${version_tag}"
 
-          if ("${{ github.ref }}" -eq "refs/heads/main") {
-            docker tag $env:NEW_IMAGE "${ghcr_image}:latest"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker tag "${NEW_IMAGE}" "${ghcr_image}:latest"
             docker push "${ghcr_image}:latest"
-          }
+          fi
 
-          Write-Host "Published ${ghcr_image}:${version_tag}"
+          echo "Published ${ghcr_image}:${version_tag}"
 
   # ---------------------------------------------------------------------------
   # Stage 4: Trigger infra deploy
