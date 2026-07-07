@@ -1,6 +1,6 @@
 {
   "name": "@easydev_org/file-upload-sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Enterprise-grade Node.js SDK for the multi-tenant File Upload Service",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -30,7 +30,7 @@
     "easydev"
   ],
   "author": "EasyDev Team",
-  "license": "ISC",
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
