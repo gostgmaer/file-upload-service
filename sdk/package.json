@@ -1,0 +1,45 @@
+{
+  "name": "@easydev_org/file-upload-sdk",
+  "version": "1.0.4",
+  "description": "Enterprise-grade Node.js SDK for the multi-tenant File Upload Service",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".env.example"
+  ],
+  "keywords": [
+    "file-upload",
+    "sdk",
+    "microservice",
+    "multi-tenant",
+    "easydev"
+  ],
+  "author": "EasyDev Team",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3"
+  }
+}
