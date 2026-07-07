@@ -1,5 +1,5 @@
 {
-  "name": "@easydev_org/file-upload-sdk",
+  "name": "file-upload-sdk",
   "version": "1.0.0",
   "description": "Enterprise-grade Node.js SDK for the multi-tenant File Upload Service",
   "main": "dist/index.js",
