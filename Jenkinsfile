@@ -37,7 +37,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'pnpm install --frozen-lockfile --prefer-offline'
+                sh 'pnpm install --frozen-lockfile --prefer-offline --config.dangerously-allow-all-scripts=true'
             }
         }
 
