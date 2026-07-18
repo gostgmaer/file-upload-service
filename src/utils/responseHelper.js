@@ -69,11 +69,13 @@ const sendError = (
     code = ERROR_CODES.INTERNAL_ERROR,
     details = null,
     hint = null,
+    errors = null,
   } = {}
 ) => {
   const err = { code };
   if (details !== null && details !== undefined) err.details = details;
   if (hint !== null && hint !== undefined) err.hint = hint;
+  if (errors !== null && errors !== undefined) err.errors = errors;
   return res.status(statusCode).json({ success: false, message, error: err });
 };
 

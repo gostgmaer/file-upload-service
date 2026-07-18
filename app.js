@@ -79,16 +79,12 @@ app.use((req, res, next) => {
 });
 
 // ─── Gateway signature verification (HMAC) ────────────────────────────────────
-// Enforced by default (GATEWAY_AUTH_REQUIRED=true)
-// Skip for health checks and the signed local-download URL - the latter
-// carries its own HMAC + expiry in the query string (see LocalAdapter.
-// getSignedUrl / localSignedUrl.js), the same role a cloud-adapter presigned
-// URL plays by pointing at a different host entirely; gateway auth would
-// defeat the purpose of a short-lived, delegable download link.
+// Disabled for /api/files - gateway HMAC removed per request.
+// Still enforced on any other path (none currently defined beyond health/metrics/files).
 app.use((req, res, next) => {
   if (
     req.path.startsWith('/health') ||
-    req.path === '/api/files/local-download' ||
+    req.path.startsWith('/api/files') ||
     req.path === '/metrics'
   ) {
     return next();

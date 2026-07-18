@@ -6,7 +6,19 @@ const fileTransactionSchema = new mongoose.Schema(
     fileId: { type: mongoose.Schema.Types.ObjectId, ref: 'File' },
     operation: {
       type: String,
-      enum: ['upload', 'update_metadata', 'rename', 'replace', 'delete', 'permanent_delete'],
+      enum: [
+        'upload',
+        'update_metadata',
+        'rename',
+        'replace',
+        'delete',
+        'permanent_delete',
+        'presign_upload_init',
+        'presign_upload_confirm',
+        'multipart_upload_init',
+        'multipart_upload_complete',
+        'multipart_upload_abort',
+      ],
       required: true,
     },
     status: {

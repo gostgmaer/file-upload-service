@@ -145,7 +145,7 @@ const getFileById = catchAsync(async (req, res) => {
   return sendSuccess(res, { data: formatFile(file), message: 'File retrieved successfully' });
 });
 
-const downloadFile = catchAsync(async (req, res) => {
+const downloadFile = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const tenantId = req.tenantId;
   const inline = req.query.inline === '1';
@@ -179,9 +179,12 @@ const downloadFile = catchAsync(async (req, res) => {
 
   stream.pipe(res);
 
-  stream.on('error', () => {
+  stream.on('error', (err) => {
+    console.error('[downloadFile] Stream error:', err);
     if (!res.headersSent) {
-      throw AppError.internal('Download failed');
+      next(AppError.internal('Download failed'));
+    } else {
+      res.destroy(err);
     }
   });
 });
@@ -190,10 +193,10 @@ const renameFile = catchAsync(async (req, res) => {
   const requestId = uuidv4();
   const { id } = req.params;
   const tenantId = req.tenantId;
-  const userId = req.headers['x-user-id'] || null;
+  const isAdmin = req.userRole === ROLES.ADMIN;
   const { name } = req.body;
 
-  const updatedFile = await fileService.renameFile(id, userId, tenantId, name, requestId);
+  const updatedFile = await fileService.renameFile(id, req.userId, tenantId, name, requestId, { isAdmin });
 
   return sendSuccess(res, { data: { file: updatedFile, requestId }, message: 'File renamed successfully' });
 });
@@ -202,9 +205,9 @@ const updateFileMetadata = catchAsync(async (req, res) => {
   const requestId = uuidv4();
   const { id } = req.params;
   const tenantId = req.tenantId;
-  const userId = req.headers['x-user-id'] || null;
+  const isAdmin = req.userRole === ROLES.ADMIN;
 
-  const updatedFile = await fileService.updateFileMetadata(id, userId, tenantId, req.body, requestId);
+  const updatedFile = await fileService.updateFileMetadata(id, req.userId, tenantId, req.body, requestId, { isAdmin });
 
   return sendSuccess(res, { data: { file: updatedFile, requestId }, message: 'File metadata updated successfully' });
 });
@@ -213,11 +216,11 @@ const replaceFileContent = catchAsync(async (req, res) => {
   const requestId = uuidv4();
   const { id } = req.params;
   const tenantId = req.tenantId;
-  const userId = req.headers['x-user-id'] || null;
+  const isAdmin = req.userRole === ROLES.ADMIN;
 
   if (!req.file) throw AppError.badRequest('No file provided');
 
-  const updatedFile = await fileService.replaceFileContent(id, userId, tenantId, req.file, requestId);
+  const updatedFile = await fileService.replaceFileContent(id, req.userId, tenantId, req.file, requestId, { isAdmin });
 
   return sendSuccess(res, { data: { file: updatedFile, requestId }, message: 'File content replaced successfully' });
 });
@@ -226,10 +229,10 @@ const deleteFile = catchAsync(async (req, res) => {
   const requestId = uuidv4();
   const { id } = req.params;
   const tenantId = req.tenantId;
-  const userId = req.headers['x-user-id'] || null;
+  const isAdmin = req.userRole === ROLES.ADMIN;
   const permanent = req.path.includes('/permanent');
 
-  const result = await fileService.deleteFile(id, userId, tenantId, requestId, permanent);
+  const result = await fileService.deleteFile(id, req.userId, tenantId, requestId, permanent, { isAdmin });
 
   return sendSuccess(res, {
     data: permanent ? { requestId } : { file: result, requestId },
@@ -420,7 +423,7 @@ const abortMultipartUpload = catchAsync(async (req, res) => {
 // same role a cloud-provider presigned URL plays for the other adapters).
 // Mounted at /api/files/local-download and exempted from the gateway-HMAC
 // middleware in app.js for exactly this reason.
-const serveLocalSignedDownload = catchAsync(async (req, res) => {
+const serveLocalSignedDownload = catchAsync(async (req, res, next) => {
   const { path: destinationPath, expires, signature } = req.query;
   if (!destinationPath || !expires || !signature) {
     throw AppError.badRequest('Missing path, expires, or signature query parameter');
@@ -434,9 +437,12 @@ const serveLocalSignedDownload = catchAsync(async (req, res) => {
     'Content-Type': mime.lookup(destinationPath) || 'application/octet-stream',
   });
   stream.pipe(res);
-  stream.on('error', () => {
+  stream.on('error', (err) => {
+    console.error('[serveLocalSignedDownload] Stream error:', err);
     if (!res.headersSent) {
-      throw AppError.internal('Download failed');
+      next(AppError.internal('Download failed'));
+    } else {
+      res.destroy(err);
     }
   });
 });
