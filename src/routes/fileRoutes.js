@@ -36,7 +36,7 @@ const {
   validateCompleteMultipart,
 } = require('../controllers/validation');
 const { uploadRateLimiter } = require('../middleware/rateLimit');
-const { requireAuth, requireAdmin } = require('../middleware/rbac');
+const { allowPublic, requireAdmin } = require('../middleware/rbac');
 const { storage } = require('../config');
 
 const router = express.Router();
@@ -64,68 +64,68 @@ const upload = multer({
 router.get('/local-download', serveLocalSignedDownload);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AUTHENTICATED ENDPOINTS (Requires user or admin role)
-// File data is never exposed to anonymous callers
+// PUBLIC ENDPOINTS (no user/admin role required)
+// Auth removed per request - only admin/analytics endpoints below stay gated
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Upload files - Authenticated users
+// Upload files - Public
 router.post(
   '/upload',
   uploadRateLimiter,
   upload.array('files', 10),
   validateFile,
   validateUpload,
-  requireAuth,
+  allowPublic,
   uploadFiles
 );
 
-// List files - Authenticated users
+// List files - Public
 router.get(
   '/',
   validateQuery,
-  requireAuth,
+  allowPublic,
   getFiles
 );
 
-// Get file metadata - Authenticated users
+// Get file metadata - Public
 router.get(
   '/:id',
-  requireAuth,
+  allowPublic,
   getFileById
 );
 
-// Download file - Authenticated users
+// Download file - Public
 router.get(
   '/:id/download',
-  requireAuth,
+  allowPublic,
   downloadFile
 );
 
-// Metadata/content mutation endpoints for authenticated users
+// Metadata/content mutation endpoints - Public
 
-// Update file metadata - Authenticated users
+// Update file metadata - Public
 router.patch(
   '/:id',
   validateUpdate,
-  requireAuth,
+  allowPublic,
   updateFileMetadata
 );
 
-// Rename file - Authenticated users
+// Rename file - Public
 router.patch(
   '/:id/rename',
   validateRename,
-  requireAuth,
+  allowPublic,
   renameFile
 );
 
-// Replace file content - Authenticated users
+// Replace file content - Public
 router.put(
   '/:id/replace',
   uploadRateLimiter,
   upload.single('file'),
   validateFile,
-  requireAuth,
+  allowPublic,
   replaceFileContent
 );
 
@@ -197,14 +197,14 @@ router.post(
   '/upload/presign',
   uploadRateLimiter,
   validatePresignedUpload,
-  requireAuth,
+  allowPublic,
   requestPresignedUpload
 );
 
 // Step 2: Confirm the upload completed (client calls after successful PUT)
 router.post(
   '/upload/presign/:id/confirm',
-  requireAuth,
+  allowPublic,
   confirmPresignedUpload
 );
 
@@ -215,7 +215,7 @@ router.post(
   '/upload/multipart/initiate',
   uploadRateLimiter,
   validateInitiateMultipart,
-  requireAuth,
+  allowPublic,
   initiateMultipartUpload
 );
 
@@ -223,7 +223,7 @@ router.post(
 router.post(
   '/upload/multipart/:id/parts',
   validateGetPartUrls,
-  requireAuth,
+  allowPublic,
   getMultipartPartUrls
 );
 
@@ -231,14 +231,14 @@ router.post(
 router.post(
   '/upload/multipart/:id/complete',
   validateCompleteMultipart,
-  requireAuth,
+  allowPublic,
   completeMultipartUpload
 );
 
 // Abort — cleans up the multipart session and removes the pending record
 router.delete(
   '/upload/multipart/:id/abort',
-  requireAuth,
+  allowPublic,
   abortMultipartUpload
 );
 
