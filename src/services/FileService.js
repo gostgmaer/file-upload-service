@@ -156,11 +156,13 @@ class FileService {
       const { isAdmin = false, allowPublic = false } = accessOptions;
       const query = { _id: fileId, tenantId, status: 'active' };
 
-      if (userId && !isAdmin) {
-        // Mutation call sites (rename/update/replace) pass userId with no
-        // accessOptions, which keeps the original strict owner-only match -
-        // they must never widen to admin/public bypass. Read call sites
-        // (getFileById/download) opt into the wider match explicitly.
+      if (!isAdmin) {
+        // Fail closed: non-admin callers are always scoped to their own
+        // files, regardless of whether userId was resolved. A missing/null
+        // userId must never widen the query to "match anything" - it should
+        // match nothing instead. Read call sites (getFileById/download) opt
+        // into the wider allowPublic match explicitly; mutation call sites
+        // (rename/update/replace/delete) keep the strict owner-only match.
         query.$or = allowPublic
           ? [{ uploader: userId }, { 'metadata.isPublic': true }]
           : [{ uploader: userId }];
@@ -246,11 +248,11 @@ class FileService {
     }
   }
 
-  async updateFileMetadata(fileId, userId, tenantId, updates, requestId) {
+  async updateFileMetadata(fileId, userId, tenantId, updates, requestId, accessOptions = {}) {
     const transaction = await this.logTransaction(tenantId, fileId, 'update_metadata', userId, requestId, updates);
 
     try {
-      const file = await this.getFileById(fileId, tenantId, userId);
+      const file = await this.getFileById(fileId, tenantId, userId, accessOptions);
 
       const allowedUpdates = ['originalName', 'category', 'metadata'];
       const updateData = {};
@@ -301,7 +303,7 @@ class FileService {
     }
   }
 
-  async replaceFileContent(fileId, userId, tenantId, newFileData, requestId) {
+  async replaceFileContent(fileId, userId, tenantId, newFileData, requestId, accessOptions = {}) {
     const transaction = await this.logTransaction(
       tenantId,
       fileId,
@@ -312,7 +314,7 @@ class FileService {
     );
 
     try {
-      const file = await this.getFileById(fileId, tenantId, userId);
+      const file = await this.getFileById(fileId, tenantId, userId, accessOptions);
 
       const newStorageKey = this.generateStorageKey(newFileData.originalname, userId, tenantId);
       const newExtension = path.extname(newFileData.originalname).toLowerCase();
@@ -357,12 +359,12 @@ class FileService {
     }
   }
 
-  async deleteFile(fileId, userId, tenantId, requestId, permanent = false) {
+  async deleteFile(fileId, userId, tenantId, requestId, permanent = false, accessOptions = {}) {
     const operation = permanent ? 'permanent_delete' : 'delete';
     const transaction = await this.logTransaction(tenantId, fileId, operation, userId, requestId);
 
     try {
-      const file = await this.getFileById(fileId, tenantId, userId);
+      const file = await this.getFileById(fileId, tenantId, userId, accessOptions);
 
       if (permanent) {
         await this.storageAdapter.delete(file.storageKey);
@@ -445,7 +447,7 @@ class FileService {
     return { scanned: expired.length, deleted, failed };
   }
 
-  async renameFile(fileId, userId, tenantId, newName, requestId) {
+  async renameFile(fileId, userId, tenantId, newName, requestId, accessOptions = {}) {
     const transaction = await this.logTransaction(
       tenantId,
       fileId,
@@ -458,7 +460,7 @@ class FileService {
     try {
       // Verify file exists and caller owns it - matches updateFileMetadata
       // and replaceFileContent, which already scope by userId.
-      await this.getFileById(fileId, tenantId, userId);
+      await this.getFileById(fileId, tenantId, userId, accessOptions);
 
       const trimmedName = newName.trim();
       if (!trimmedName) throw new Error('Name cannot be empty');

@@ -11,7 +11,10 @@ describe('GET /health', () => {
     expect(res.body).toMatchObject({
       service: 'file-upload-service',
       uptime:  expect.any(Number),
-      db:      expect.any(String),
+      database: {
+        status: expect.any(String),
+        state:  expect.any(Number),
+      },
       memory: {
         heapUsedMB:  expect.any(Number),
         heapTotalMB: expect.any(Number),
