@@ -47,6 +47,16 @@ class R2Adapter extends StorageAdapter {
     this.bucket = storage.r2.bucket;
   }
 
+  // R2 custom domains (R2_PUBLIC_DOMAIN) are bound to a single bucket, so
+  // the object is served at https://<domain>/<key> — no scheme in the env
+  // var and no bucket segment in the path.
+  _publicUrl(destinationPath) {
+    const domain = storage.r2.publicDomain.startsWith('http')
+      ? storage.r2.publicDomain
+      : `https://${storage.r2.publicDomain}`;
+    return `${domain}/${destinationPath}`;
+  }
+
   sanitizeMetadata(metadata = {}) {
     const safeMeta = {};
     for (const [key, value] of Object.entries(metadata)) {
@@ -78,13 +88,12 @@ class R2Adapter extends StorageAdapter {
       });
 
       const result = await this.s3Client.send(command);
-      const publicUrl = `${storage.r2.publicDomain}/${this.bucket}/${destinationPath}`;
 
       return {
         success: true,
         path: destinationPath,
         etag: result.ETag,
-        location: publicUrl,
+        location: this._publicUrl(destinationPath),
       };
     } catch (error) {
       console.error('[R2Adapter] Upload error:', error);
@@ -108,7 +117,7 @@ class R2Adapter extends StorageAdapter {
         success: true,
         path: destinationPath,
         etag: result.ETag,
-        location: `${storage.r2.endpoint}/${this.bucket}/${destinationPath}`,
+        location: this._publicUrl(destinationPath),
       };
     } catch (error) {
       throw new Error(`R2 stream upload failed: ${error.message}`);
@@ -272,7 +281,7 @@ class R2Adapter extends StorageAdapter {
       });
       const result = await this.s3Client.send(command);
       return {
-        location: result.Location || `${storage.r2.publicDomain}/${this.bucket}/${destinationPath}`,
+        location: result.Location || this._publicUrl(destinationPath),
         etag: result.ETag,
       };
     } catch (error) {

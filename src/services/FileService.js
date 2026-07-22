@@ -809,21 +809,23 @@ class FileService {
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
   _buildPublicUrl(storageKey) {
-    const adapter = process.env.STORAGE_ADAPTER || 'local';
+    const { storage: storageConfig } = require('../config');
+    const adapter = storageConfig.type || 'local';
     if (adapter === 's3') {
-      const { storage: storageConfig } = require('../config');
       return `https://${storageConfig.s3.bucket}.s3.${storageConfig.s3.region}.amazonaws.com/${storageKey}`;
     }
     if (adapter === 'r2') {
-      const { storage: storageConfig } = require('../config');
-      return `${storageConfig.r2.publicDomain}/${storageConfig.r2.bucket}/${storageKey}`;
+      // R2 custom domains (R2_PUBLIC_DOMAIN) are bound to a single bucket:
+      // objects are served at https://<domain>/<key>, no bucket segment.
+      const domain = storageConfig.r2.publicDomain.startsWith('http')
+        ? storageConfig.r2.publicDomain
+        : `https://${storageConfig.r2.publicDomain}`;
+      return `${domain}/${storageKey}`;
     }
     if (adapter === 'gcs') {
-      const { storage: storageConfig } = require('../config');
       return `gs://${storageConfig.gcs.bucket}/${storageKey}`;
     }
     if (adapter === 'azure') {
-      const { storage: storageConfig } = require('../config');
       return `https://${storageConfig.azure.connectionString.match(/AccountName=([^;]+)/)?.[1]}.blob.core.windows.net/${storageConfig.azure.container}/${storageKey}`;
     }
     return `/${storageKey}`;
