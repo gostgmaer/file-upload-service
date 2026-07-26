@@ -122,23 +122,48 @@ class FileService {
         uploader: uploaderId || 'anonymous',
         publicUrl: uploadResult.location,
         category: metadata.category || '',
-        metadata: {
-          description: metadata.description || '',
-          tags: metadata.tags || [],
-          custom: metadata.custom || {},
-          title: metadata.title || '',
-          altText: metadata.altText || '',
-          author: metadata.author || '',
-          source: metadata.source || '',
-          language: metadata.language || '',
-          expiresAt: metadata.expiresAt || null,
-          isPublic: metadata.isPublic || false,
-          linkedTo: metadata.linkedTo || {},
-        },
       });
 
       await file.save();
       this.scanFileAsync(file, fileData.buffer);
+
+      // Extract production-grade metadata and store in dedicated indexed FileMetadata table
+      try {
+        const MetadataExtractor = require('../utils/MetadataExtractor');
+        const FileMetadata = require('../models/FileMetadata');
+        const technicalMeta = await MetadataExtractor.extract(
+          fileData.buffer,
+          fileData.mimetype,
+          fileData.originalname
+        );
+
+        await FileMetadata.create({
+          fileId: file._id,
+          tenantId,
+          technical: technicalMeta,
+          business: {
+            title: metadata.title || '',
+            description: metadata.description || '',
+            category: metadata.category || '',
+            tags: metadata.tags || [],
+            author: metadata.author || '',
+            source: metadata.source || '',
+            language: metadata.language || '',
+            altText: metadata.altText || '',
+            isPublic: metadata.isPublic || false,
+            expiresAt: metadata.expiresAt || null,
+            linkedTo: metadata.linkedTo || {},
+            custom: metadata.custom || {},
+          },
+          audit: {
+            uploader: uploaderId || 'anonymous',
+            ipAddress: metadata.audit?.ipAddress || '',
+            userAgent: metadata.audit?.userAgent || '',
+          },
+        });
+      } catch (metaErr) {
+        console.warn(`[FileService] Metadata extraction warning for file ${file._id}: ${metaErr.message}`);
+      }
 
       await this.updateTransaction(transaction._id, 'success', uploadResult);
       transaction.fileId = file._id;
@@ -168,7 +193,7 @@ class FileService {
           : [{ uploader: userId }];
       }
 
-      const file = await File.findOne(query);
+      const file = await File.findOne(query).populate('metadataDoc');
       if (!file) throw AppError.notFound('File not found');
 
       return file;
@@ -210,7 +235,7 @@ class FileService {
       const skip = (page - 1) * limit;
 
       const [files, total] = await Promise.all([
-        File.find(query).sort(sort).skip(skip).limit(limit),
+        File.find(query).populate('metadataDoc').sort(sort).skip(skip).limit(limit),
         File.countDocuments(query),
       ]);
 
@@ -809,21 +834,23 @@ class FileService {
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
   _buildPublicUrl(storageKey) {
-    const adapter = process.env.STORAGE_ADAPTER || 'local';
+    const { storage: storageConfig } = require('../config');
+    const adapter = storageConfig.type || 'local';
     if (adapter === 's3') {
-      const { storage: storageConfig } = require('../config');
       return `https://${storageConfig.s3.bucket}.s3.${storageConfig.s3.region}.amazonaws.com/${storageKey}`;
     }
     if (adapter === 'r2') {
-      const { storage: storageConfig } = require('../config');
-      return `${storageConfig.r2.publicDomain}/${storageConfig.r2.bucket}/${storageKey}`;
+      // R2 custom domains (R2_PUBLIC_DOMAIN) are bound to a single bucket:
+      // objects are served at https://<domain>/<key>, no bucket segment.
+      const domain = storageConfig.r2.publicDomain.startsWith('http')
+        ? storageConfig.r2.publicDomain
+        : `https://${storageConfig.r2.publicDomain}`;
+      return `${domain}/${storageKey}`;
     }
     if (adapter === 'gcs') {
-      const { storage: storageConfig } = require('../config');
       return `gs://${storageConfig.gcs.bucket}/${storageKey}`;
     }
     if (adapter === 'azure') {
-      const { storage: storageConfig } = require('../config');
       return `https://${storageConfig.azure.connectionString.match(/AccountName=([^;]+)/)?.[1]}.blob.core.windows.net/${storageConfig.azure.container}/${storageKey}`;
     }
     return `/${storageKey}`;

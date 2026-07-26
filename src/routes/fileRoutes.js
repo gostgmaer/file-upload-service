@@ -46,10 +46,15 @@ const upload = multer({
   storage: multerStorage,
   limits: { fileSize: storage.maxFileSize },
   fileFilter: (req, file, cb) => {
-    if (storage.allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
+    const parts = file.originalname.split('.');
+    const ext = parts.length > 1 ? '.' + parts[parts.length - 1].toLowerCase() : '';
+
+    if (!storage.allowedMimeTypes.includes(file.mimetype)) {
       cb(new Error(`File type ${file.mimetype} not allowed`), false);
+    } else if (ext && !storage.allowedFileExtensions.includes(ext)) {
+      cb(new Error(`File extension ${ext} not allowed`), false);
+    } else {
+      cb(null, true);
     }
   },
 });

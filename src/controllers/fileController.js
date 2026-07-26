@@ -21,37 +21,44 @@ const fileService = new FileService();
 //   gcs    → gs://{bucket}/{storageKey}   (not HTTP — use signed URL to download)
 //   azure  → https://{account}.blob.core.windows.net/{container}/{storageKey}
 //   r2     → {R2_PUBLIC_DOMAIN}/{bucket}/{storageKey}
-const formatFile = (file) => ({
-  id: file._id,
-  tenantId: file.tenantId,
-  originalName: file.originalName,
-  storageKey: file.storageKey,
-  size: file.size,
-  mimeType: file.mimeType,
-  extension: file.extension,
-  uploader: file.uploader,
-  category: file.category,
-  status: file.status,
-  scanStatus: file.scanStatus,
-  // The URL you can use to access / download the file directly (adapter-dependent)
-  url: file.publicUrl,
-  metadata: {
-    description: file.metadata?.description || '',
-    tags: file.metadata?.tags || [],
-    custom: file.metadata?.custom || {},
-    title: file.metadata?.title || '',
-    altText: file.metadata?.altText || '',
-    author: file.metadata?.author || '',
-    source: file.metadata?.source || '',
-    language: file.metadata?.language || '',
-    expiresAt: file.metadata?.expiresAt || null,
-    isPublic: file.metadata?.isPublic ?? false,
-    linkedTo: file.metadata?.linkedTo || {},
-  },
-  versions: file.versions || [],
-  createdAt: file.createdAt,
-  updatedAt: file.updatedAt,
-});
+const formatFile = (file) => {
+  const metaDoc = file.metadataDoc || file._metadataDoc || {};
+  const biz = metaDoc.business || file.metadata || {};
+  const tech = metaDoc.technical || file.technicalMetadata || null;
+
+  return {
+    id: file._id,
+    tenantId: file.tenantId,
+    originalName: file.originalName,
+    storageKey: file.storageKey,
+    size: file.size,
+    mimeType: file.mimeType,
+    extension: file.extension,
+    uploader: file.uploader,
+    category: file.category,
+    status: file.status,
+    scanStatus: file.scanStatus,
+    // The URL you can use to access / download the file directly (adapter-dependent)
+    url: file.publicUrl,
+    metadata: {
+      description: biz.description || '',
+      tags: biz.tags || [],
+      custom: biz.custom || {},
+      title: biz.title || '',
+      altText: biz.altText || '',
+      author: biz.author || '',
+      source: biz.source || '',
+      language: biz.language || '',
+      expiresAt: biz.expiresAt || null,
+      isPublic: biz.isPublic ?? false,
+      linkedTo: biz.linkedTo || {},
+    },
+    technicalMetadata: tech,
+    versions: file.versions || [],
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+  };
+};
 
 const uploadFiles = catchAsync(async (req, res) => {
   const requestId = uuidv4();
@@ -80,12 +87,28 @@ const uploadFiles = catchAsync(async (req, res) => {
       entityType: req.body.linkedEntityType || '',
       entityId: req.body.linkedEntityId || '',
     },
+    audit: {
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+    },
   };
 
   const uploadedFiles = [];
 
   for (const file of req.files) {
     const uploadedFile = await fileService.uploadFile(file, userId, tenantId, requestId, metadata);
+    try {
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 0) {
+        const FileMetadata = require('../models/FileMetadata');
+        const extraMeta = await FileMetadata.findOne({ fileId: uploadedFile._id }).lean();
+        if (extraMeta) {
+          uploadedFile.technicalMetadata = extraMeta.technical;
+        }
+      }
+    } catch (e) {
+      // Non-critical metadata query lookup
+    }
     uploadedFiles.push(formatFile(uploadedFile));
   }
 

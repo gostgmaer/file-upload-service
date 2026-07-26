@@ -49,6 +49,7 @@ const envSchema = Joi.object({
   // File limits
   MAX_FILE_SIZE: Joi.number().default(10485760),
   ALLOWED_MIME_TYPES: Joi.string().optional(),
+  ALLOWED_FILE_EXTENSIONS: Joi.string().optional(),
   UPLOAD_RATE_LIMIT: Joi.number().default(10),
   UPLOAD_RATE_WINDOW: Joi.number().default(900000),
   SIGNED_URL_EXPIRY: Joi.number().default(3600),

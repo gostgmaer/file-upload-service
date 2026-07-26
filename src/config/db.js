@@ -37,7 +37,7 @@ const connectDB = async (maxRetries = 5, initialDelay = 2000) => {
   }
 
   // Default database if URI doesn't specify one
-  uri = ensureDatabaseName(uri, process.env.MONGO_DB_NAME || "file_management");
+  uri = ensureDatabaseName(uri, process.env.MONGO_DB_NAME || "fms-service");
 
   const mongoOptions = {
     maxPoolSize: 20,

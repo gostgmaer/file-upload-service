@@ -22,6 +22,7 @@ const validateFile = async (req, res, next) => {
 
     const maxSize = storage.maxFileSize;
     const allowedMimeTypes = storage.allowedMimeTypes;
+    const allowedFileExtensions = storage.allowedFileExtensions;
 
     for (const file of files) {
       // 1. File size validation
@@ -104,6 +105,16 @@ const validateFile = async (req, res, next) => {
         if (ext) {
           file.originalname = `${file.originalname}.${ext}`;
         }
+      }
+
+      // 8. Validate file extension
+      const parts = file.originalname.split('.');
+      const fileExt = parts.length > 1 ? '.' + parts[parts.length - 1].toLowerCase() : '';
+      
+      if (fileExt && !allowedFileExtensions.includes(fileExt)) {
+        return next(AppError.badRequest(
+          `File extension ${fileExt} not allowed for file ${file.originalname}`
+        ));
       }
     }
 
