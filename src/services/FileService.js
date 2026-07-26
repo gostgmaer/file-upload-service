@@ -122,23 +122,48 @@ class FileService {
         uploader: uploaderId || 'anonymous',
         publicUrl: uploadResult.location,
         category: metadata.category || '',
-        metadata: {
-          description: metadata.description || '',
-          tags: metadata.tags || [],
-          custom: metadata.custom || {},
-          title: metadata.title || '',
-          altText: metadata.altText || '',
-          author: metadata.author || '',
-          source: metadata.source || '',
-          language: metadata.language || '',
-          expiresAt: metadata.expiresAt || null,
-          isPublic: metadata.isPublic || false,
-          linkedTo: metadata.linkedTo || {},
-        },
       });
 
       await file.save();
       this.scanFileAsync(file, fileData.buffer);
+
+      // Extract production-grade metadata and store in dedicated indexed FileMetadata table
+      try {
+        const MetadataExtractor = require('../utils/MetadataExtractor');
+        const FileMetadata = require('../models/FileMetadata');
+        const technicalMeta = await MetadataExtractor.extract(
+          fileData.buffer,
+          fileData.mimetype,
+          fileData.originalname
+        );
+
+        await FileMetadata.create({
+          fileId: file._id,
+          tenantId,
+          technical: technicalMeta,
+          business: {
+            title: metadata.title || '',
+            description: metadata.description || '',
+            category: metadata.category || '',
+            tags: metadata.tags || [],
+            author: metadata.author || '',
+            source: metadata.source || '',
+            language: metadata.language || '',
+            altText: metadata.altText || '',
+            isPublic: metadata.isPublic || false,
+            expiresAt: metadata.expiresAt || null,
+            linkedTo: metadata.linkedTo || {},
+            custom: metadata.custom || {},
+          },
+          audit: {
+            uploader: uploaderId || 'anonymous',
+            ipAddress: metadata.audit?.ipAddress || '',
+            userAgent: metadata.audit?.userAgent || '',
+          },
+        });
+      } catch (metaErr) {
+        console.warn(`[FileService] Metadata extraction warning for file ${file._id}: ${metaErr.message}`);
+      }
 
       await this.updateTransaction(transaction._id, 'success', uploadResult);
       transaction.fileId = file._id;
@@ -168,7 +193,7 @@ class FileService {
           : [{ uploader: userId }];
       }
 
-      const file = await File.findOne(query);
+      const file = await File.findOne(query).populate('metadataDoc');
       if (!file) throw AppError.notFound('File not found');
 
       return file;
@@ -210,7 +235,7 @@ class FileService {
       const skip = (page - 1) * limit;
 
       const [files, total] = await Promise.all([
-        File.find(query).sort(sort).skip(skip).limit(limit),
+        File.find(query).populate('metadataDoc').sort(sort).skip(skip).limit(limit),
         File.countDocuments(query),
       ]);
 

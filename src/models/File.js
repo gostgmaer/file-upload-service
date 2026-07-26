@@ -19,23 +19,6 @@ const fileSchema = new mongoose.Schema(
     uploader: { type: String, default: 'anonymous' }, // userId string from X-User-Id header
     publicUrl: { type: String },
     category: { type: String, trim: true, default: '' }, // free-form category label
-    metadata: {
-      description: { type: String, trim: true },
-      tags: [{ type: String, trim: true }],
-      custom: { type: mongoose.Schema.Types.Mixed },
-      title: { type: String, trim: true },        // display title separate from filename
-      altText: { type: String, trim: true },       // accessibility alt text (useful for images)
-      author: { type: String, trim: true },        // document/content author
-      source: { type: String, trim: true },        // origin URL or reference string
-      language: { type: String, trim: true },      // ISO 639-1 language code (e.g. 'en', 'fr')
-      expiresAt: { type: Date },                   // optional TTL / expiry datetime
-      isPublic: { type: Boolean, default: false }, // public visibility flag
-      linkedTo: {                                  // optional polymorphic entity reference
-        entityType: { type: String, trim: true },  // e.g. 'product', 'user', 'invoice'
-        entityId: { type: String, trim: true },    // ID of the linked entity
-      },
-    },
-    versions: [versionSchema],
     status: {
       type: String,
       enum: ['active', 'deleted', 'archived', 'pending'],
@@ -55,7 +38,11 @@ const fileSchema = new mongoose.Schema(
       expiresAt: { type: Date },        // When the presigned URL / multipart session expires
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
 // Multi-tenant compound indexes
@@ -63,12 +50,15 @@ fileSchema.index({ tenantId: 1, uploader: 1 });
 fileSchema.index({ tenantId: 1, status: 1 });
 fileSchema.index({ tenantId: 1, createdAt: -1 });
 fileSchema.index({ tenantId: 1, mimeType: 1 });
-fileSchema.index({ tenantId: 1, 'metadata.tags': 1 });
 fileSchema.index({ tenantId: 1, category: 1 });
-fileSchema.index({ tenantId: 1, 'metadata.isPublic': 1 });
-fileSchema.index({ tenantId: 1, 'metadata.expiresAt': 1 });
-fileSchema.index({ tenantId: 1, 'metadata.language': 1 });
-fileSchema.index({ tenantId: 1, 'metadata.linkedTo.entityType': 1, 'metadata.linkedTo.entityId': 1 });
+
+// Virtual Population link to FileMetadata model
+fileSchema.virtual('metadataDoc', {
+  ref: 'FileMetadata',
+  localField: '_id',
+  foreignField: 'fileId',
+  justOne: true,
+});
 
 fileSchema.virtual('currentVersion').get(function () {
   if (this.versions.length === 0) {
