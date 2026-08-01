@@ -6,7 +6,7 @@ name: File Upload Service Pipeline
 # actually verified to build or run). Mirrors the existing, working pipeline
 # pattern from multi-tannet-auth-services/payment-microservice
 # (docker-build-deploy.yml / cd.yml) for fleet-wide consistency, adapted for
-# this repo's actual stack (Express/JS, npm, no Prisma).
+# this repo's actual stack (Express/JS, pnpm, no Prisma).
 
 on:
   # push:
@@ -63,7 +63,7 @@ jobs:
               - 'server.js'
             dependencies:
               - 'package.json'
-              - 'package-lock.json'
+              - 'pnpm-lock.yaml'
 
   # ---------------------------------------------------------------------------
   # Stage 2: Code quality + vulnerability (merged, runs only when code/deps changed)
@@ -77,14 +77,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # pnpm must be set up before actions/setup-node so its own `cache: pnpm`
+      # can find the pnpm store.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Syntax check (no lint config exists yet in this repo)
         if: needs.changes.outputs.code_changed == 'true' || github.event_name == 'workflow_dispatch'
@@ -104,10 +109,10 @@ jobs:
       - name: Test (non-blocking until the existing suite is fixed)
         if: needs.changes.outputs.code_changed == 'true' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
-        run: npm test
+        run: pnpm test
 
       - name: Dependency audit
-        run: npm audit --omit=dev --audit-level critical || true
+        run: pnpm audit --prod --audit-level critical || true
 
       - name: Trivy filesystem scan (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -119,7 +124,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
-          exit-code: '0'
+          exit-code: "0"
           cache-dir: .trivy-cache
 
   # ---------------------------------------------------------------------------
@@ -171,7 +176,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
-          exit-code: '0'
+          exit-code: "0"
           cache-dir: .trivy-cache
 
       - name: Login to GitHub Container Registry
