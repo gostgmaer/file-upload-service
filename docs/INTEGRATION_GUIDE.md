@@ -999,14 +999,14 @@ Every file record, query, and storage path is namespaced by `tenantId` from the 
 
 ### Tenant isolation modes
 
-Set via `TENANCY_MODE` in `.env`:
-
-| Mode | Description | Use when |
-|---|---|---|
-| `shared` (default) | Single MongoDB database, `tenantId` field on every document | Most SaaS applications, simpler ops |
-| `per-db` | Each tenant gets its own MongoDB database, lazy-created | Regulatory requirements, strict data isolation |
-
-### Shared mode (default)
+Set via `TENANCY_MODE` in `.env`. **Only `shared` is currently implemented** —
+`per-db` is rejected at startup by config validation. A per-database mode was
+scaffolded at one point (a `getTenantConnection()` helper still exists in
+`src/config/db.js`) but was never wired into the actual request path, so
+setting it would have silently done nothing while looking configured. If you
+need real per-tenant database isolation, that helper would need to actually
+be called from the connection-resolution path first — it isn't a supported
+option today.
 
 ```dotenv
 TENANCY_MODE=shared
@@ -1014,15 +1014,6 @@ MONGO_URI=mongodb://localhost:27017/file_service_db
 ```
 
 All tenants share one database. Tenant isolation is enforced entirely at the query level.
-
-### Per-DB mode
-
-```dotenv
-TENANCY_MODE=per-db
-MONGO_URI=mongodb://localhost:27017/{tenant}_file_db
-```
-
-The `{tenant}` placeholder is replaced at runtime with the actual tenant ID. Each tenant's data is in a separate database (e.g. `tenant_a_file_db`, `tenant_b_file_db`).
 
 ---
 

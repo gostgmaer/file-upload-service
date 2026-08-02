@@ -96,8 +96,8 @@ MONGO_URI=mongodb://localhost:27017/file_service_db
 #### Multi-Tenancy
 ```env
 TENANCY_ENABLED=true
-TENANCY_MODE=shared           # shared | per-db
-DEFAULT_TENANT_ID=default
+TENANCY_MODE=shared           # only 'shared' is implemented; 'per-db' is rejected at startup
+DEFAULT_TENANT_ID=easydev
 ```
 
 #### Storage Backend

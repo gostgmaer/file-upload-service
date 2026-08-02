@@ -10,8 +10,18 @@ const envSchema = Joi.object({
     then: Joi.string().min(32).required(),
     otherwise: Joi.string().allow('').optional(),
   }),
-  TENANCY_MODE: Joi.string().valid('shared', 'per-db').default('shared'),
-  DEFAULT_TENANT_ID: Joi.string().default('default'),
+  // 'per-db' is documented/schema-validated but not actually implemented
+  // (getTenantConnection() in src/config/db.js is dead code, never called) --
+  // reject it explicitly rather than silently accepting a value that
+  // wouldn't do anything, which could mislead an operator into thinking
+  // they have real per-tenant DB isolation when they don't.
+  TENANCY_MODE: Joi.string().valid('shared').default('shared'),
+  // Matches middleware/tenant.js's actual runtime default -- this value is
+  // never written back to process.env (validateEnv()'s return is discarded
+  // at startup), so keeping the two in sync is purely to avoid a
+  // misleading validated-config value; tenant.js's own default is what
+  // actually takes effect.
+  DEFAULT_TENANT_ID: Joi.string().default('easydev'),
   STORAGE_TYPE: Joi.string().valid('local', 's3', 'gcs', 'azure', 'r2').default('local'),
   LOCAL_UPLOAD_DIR: Joi.string().default('uploads'),
   // Required whenever local storage is active - signs LocalAdapter's download
