@@ -69,8 +69,11 @@ const upload = multer({
 router.get('/local-download', serveLocalSignedDownload);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC ENDPOINTS (no user/admin role required)
-// Auth removed per request - only admin/analytics endpoints below stay gated
+// PUBLIC ENDPOINTS (no user/admin role required -- allowPublic still lets
+// anonymous callers through, unchanged). The request must still originate
+// from the gateway: app.js's verifyGatewaySignature check applies to all of
+// /api/files again, so an anonymous caller is only "public" relative to the
+// gateway's own auth, not to this service directly.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Upload files - Public
