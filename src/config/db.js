@@ -94,31 +94,4 @@ const disconnectDB = async () => {
   console.log("MongoDB disconnected");
 };
 
-// Per-DB tenancy mode: lazy connection cache
-const tenantConnections = new Map();
-
-const getTenantConnection = async (tenantId) => {
-  if (tenantConnections.has(tenantId)) {
-    return tenantConnections.get(tenantId);
-  }
-
-  let uri = dbConfig.uri;
-
-  if (!uri) {
-    throw new Error("MONGO_URI environment variable is not set");
-  }
-
-  if (uri.includes("{tenant}")) {
-    uri = uri.replace("{tenant}", tenantId);
-  } else {
-    uri = ensureDatabaseName(uri, tenantId);
-  }
-
-  const conn = await mongoose.createConnection(uri, { maxPoolSize: 10, serverSelectionTimeoutMS: 5000 }).asPromise();
-
-  tenantConnections.set(tenantId, conn);
-
-  return conn;
-};
-
-module.exports = { connectDB, disconnectDB, getTenantConnection };
+module.exports = { connectDB, disconnectDB };

@@ -79,12 +79,26 @@ app.use((req, res, next) => {
 });
 
 // ─── Gateway signature verification (HMAC) ────────────────────────────────────
-// Disabled for /api/files - gateway HMAC removed per request.
-// Still enforced on any other path (none currently defined beyond health/metrics/files).
+// Skip for health checks and the signed local-download URL - the latter
+// carries its own HMAC + expiry in the query string (see LocalAdapter.
+// getSignedUrl / localSignedUrl.js), the same role a cloud-adapter presigned
+// URL plays by pointing at a different host entirely; gateway auth would
+// defeat the purpose of a short-lived, delegable download link.
+//
+// Every other /api/files route MUST verify the gateway signature: the
+// gateway (web-agency-backend-api/config/services.js) already computes and
+// sends a valid X-Gateway-HMAC on every proxied file request, for both
+// authenticated AND anonymous ("optional-bearer") callers, so requiring it
+// here breaks no legitimate traffic. Skipping verification here previously
+// meant any direct caller (bypassing the gateway entirely) could set
+// arbitrary X-Tenant-Id / X-User-Role headers and fully impersonate any
+// tenant or an admin on every file route (tenant-alignment audit finding,
+// see gateway's own audit/AUDIT-web-agency-gateway.md for the same class of
+// issue elsewhere).
 app.use((req, res, next) => {
   if (
     req.path.startsWith('/health') ||
-    req.path.startsWith('/api/files') ||
+    req.path === '/api/files/local-download' ||
     req.path === '/metrics'
   ) {
     return next();
