@@ -36,7 +36,7 @@ const {
   validateCompleteMultipart,
 } = require('../controllers/validation');
 const { uploadRateLimiter } = require('../middleware/rateLimit');
-const { allowPublic, requireAdmin } = require('../middleware/rbac');
+const { allowPublic, requireAuth, requireAdmin } = require('../middleware/rbac');
 const { storage } = require('../config');
 
 const router = express.Router();
@@ -142,14 +142,20 @@ router.put(
 // Requests must include gateway-signed user headers
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Soft delete - ADMIN ONLY
+// Soft delete - any authenticated user may delete their OWN file; admins may
+// delete any file. Ownership + tenant scoping is enforced by
+// FileService.getFileById()'s query (uploader/tenantId match, isAdmin
+// bypasses) — requireAuth here only rejects anonymous callers outright
+// instead of letting them fall through to a 404.
 router.delete(
   '/:id',
-  requireAdmin,
+  requireAuth,
   deleteFile
 );
 
-// Permanent delete - ADMIN ONLY
+// Permanent delete - ADMIN ONLY. Irreversible (removes the DB record AND
+// the underlying cloud/disk object, no recovery), so this stays admin-gated
+// regardless of ownership, unlike soft delete above.
 router.delete(
   '/:id/permanent',
   requireAdmin,
